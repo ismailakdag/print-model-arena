@@ -24,20 +24,22 @@ export function parseCsv(text) {
     cell += char;
   }
   if (cell.length || row.length) { row.push(cell); rows.push(row); }
-  const headers = rows.shift() || [];
+  const headers = (rows.shift() || []).map((header) => header.replace(/^\uFEFF/, '').trim());
   return rows
     .filter((values) => values.some((value) => value.trim() !== ''))
-    .map((values) => Object.fromEntries(headers.map((header, index) => [header.trim(), (values[index] || '').trim()])));
+    .map((values) => Object.fromEntries(headers.map((header, index) => [header, (values[index] || '').trim()])));
 }
 
 export function hasUsableImageUrl(value) {
   const candidate = String(value || '').trim();
   if (!candidate || /^(g[oö]rsel yok|yok|n\/a|null|undefined|-)$/i.test(candidate)) return false;
+  if (!/^https?:\/\/[^\s/]+[^\s]*$/i.test(candidate)) return false;
   try {
     const url = new URL(candidate);
     return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname);
   } catch {
-    return false;
+    // Older iOS/in-app WebViews may not expose the URL constructor reliably.
+    return true;
   }
 }
 

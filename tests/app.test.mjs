@@ -27,6 +27,8 @@ test('only rows with usable HTTP(S) image URLs enter the model deck and counts',
   assert.equal(result.sourceCount, 5);
   assert.equal(result.excludedCount, 4);
   assert.equal(hasUsableImageUrl('http://example.test/image.png'), true);
+  assert.equal(hasUsableImageUrl('https://drive.google.com/thumbnail?id=abc&sz=w400'), true);
+  assert.equal(hasUsableImageUrl('https://'), false);
 });
 
 test('enqueue is immediate, durable, and does not wait for the network write', async () => {
