@@ -72,9 +72,27 @@
       </section>
 
       <section class="workspace">
-        <article class="model-card" id="modelCard" aria-live="polite">
-          <div class="empty-state">Sheet okunuyor…</div>
-        </article>
+        <div class="arena-column">
+          <div class="swipe-stage" id="swipeStage">
+            <article class="model-card model-card-preview" id="nextCard" aria-hidden="true"></article>
+            <article class="model-card" id="modelCard" aria-live="polite">
+              <div class="empty-state">Sheet okunuyor…</div>
+            </article>
+          </div>
+          <div class="decision-dock" aria-label="Karar kontrolleri">
+            <button class="undo-button" id="undoVote" type="button" disabled aria-label="Son karara geri dön">
+              <span aria-hidden="true">↶</span><small>geri</small>
+            </button>
+            <button class="decision-button dislike" id="dislikeButton" type="button" aria-label="Beğenmedim, sola kaydır">
+              <span aria-hidden="true">×</span><small>beğenmedim</small>
+            </button>
+            <div class="swipe-instruction" aria-hidden="true"><span>←</span> kaydır <span>→</span></div>
+            <button class="decision-button like" id="likeButton" type="button" aria-label="Beğendim, sağa kaydır">
+              <span aria-hidden="true">♥</span><small>beğendim</small>
+            </button>
+          </div>
+          <p class="keyboard-hint">Masaüstünde sürükle veya <kbd>←</kbd> <kbd>→</kbd> tuşlarını kullan.</p>
+        </div>
         <aside class="side-panel">
           <div class="side-card decision-card">
             <div class="side-card-heading"><span>oturum</span><button class="text-button" id="resetSession">sıfırla</button></div>

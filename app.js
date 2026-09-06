@@ -12,6 +12,9 @@ const state = {
   sort: 'queue',
   currentId: null,
   recent: [],
+  history: [],
+  editingId: null,
+  busy: false,
   sheetLive: false,
   writeAvailable: false,
   loadError: null,
@@ -119,24 +122,49 @@ function counts() {
 }
 
 function currentRow() {
+  if (state.editingId) {
+    const editing = state.rows.find((row) => row.id === state.editingId);
+    if (editing) return editing;
+    state.editingId = null;
+  }
   const rows = visibleRows();
   if (!rows.length) return null;
   if (!state.currentId || !rows.some((r) => r.id === state.currentId)) state.currentId = rows[0].id;
   return rows.find((r) => r.id === state.currentId) || rows[0];
 }
 
+function nextRow(row) {
+  return visibleRows().find((candidate) => candidate.id !== row?.id) || null;
+}
+
+function previewMarkup(row) {
+  if (!row) return '';
+  return `
+    <div class="model-visual">
+      ${row.image ? `<img src="${escapeHtml(row.image)}" alt="" loading="eager" draggable="false">` : `<div class="visual-placeholder"><div class="visual-placeholder-inner"><span>${escapeHtml(row['Model'])}</span></div></div>`}
+    </div>
+    <div class="model-info"><small>sıradaki model</small><h3>${escapeHtml(row['Model'])}</h3></div>`;
+}
+
 function renderCard() {
   const row = currentRow();
   const card = $('#modelCard');
+  card.className = 'model-card';
+  card.removeAttribute('style');
+  card.removeAttribute('tabindex');
   if (!row) {
     card.innerHTML = `<div class="empty-state"><div><strong>Bu görünümde model kalmadı.</strong><br><span class="muted">Filtreyi değiştirerek tüm kataloğa dönebilirsin.</span></div></div>`;
+    $('#nextCard').innerHTML = '';
     return;
   }
-  const locked = isVoted(row);
+  const revisiting = state.mode === 'personal' && state.editingId === row.id;
+  const locked = isVoted(row) && !revisiting;
   const currentVote = state.mode === 'shared' ? (isLiked(row.like) ? 'like' : isDisliked(row.like) ? 'dislike' : '') : state.myVotes[row.id] || '';
   card.innerHTML = `
+    <div class="swipe-stamp dislike" aria-hidden="true">geç</div>
+    <div class="swipe-stamp like" aria-hidden="true">beğen</div>
     <div class="model-visual">
-      ${row.image ? `<img src="${escapeHtml(row.image)}" alt="${escapeHtml(row['Model'])}" loading="lazy" onerror="this.closest('.model-visual').innerHTML='<div class=\"visual-placeholder\"><div class=\"visual-placeholder-inner\"><span>görsel yüklenemedi</span></div></div>'">` : `<div class="visual-placeholder"><div class="visual-placeholder-inner"><span>${escapeHtml(row['Model'])}</span></div></div>`}
+      ${row.image ? `<img src="${escapeHtml(row.image)}" alt="${escapeHtml(row['Model'])}" loading="eager" draggable="false">` : `<div class="visual-placeholder"><div class="visual-placeholder-inner"><span>${escapeHtml(row['Model'])}</span></div></div>`}
       <div class="visual-overlay"><span class="badge">${escapeHtml(row['Sınıf'] || '—')} sınıfı</span>${row.status ? `<span class="badge olive">${escapeHtml(row.status)}</span>` : ''}</div>
     </div>
     <div class="model-info">
@@ -154,13 +182,23 @@ function renderCard() {
         <div><small>tabla</small><strong>${row.trayCount == null ? '—' : `${row.trayCount} adet`}</strong></div>
         <div><small>süre</small><strong>${row.trayHours == null ? '—' : `${row.trayHours.toLocaleString('tr-TR')} sa`}</strong></div>
       </div>
-      <div class="actions">
-        <button class="vote-button dislike ${currentVote === 'dislike' ? 'selected' : ''}" data-vote="dislike" ${locked ? 'disabled' : ''}>beğenmedim</button>
-        <button class="vote-button like ${currentVote === 'like' ? 'selected' : ''}" data-vote="like" ${locked ? 'disabled' : ''}>beğendim</button>
-      </div>
-      <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? (state.mode === 'shared' ? 'ortak karar işlendi' : `bu model ${state.participant || 'senin'} tarafından puanlandı`) : 'kararın bu Sheet’e işlenecek'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div>
+      <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${revisiting ? `önceki karar: ${currentVote === 'like' ? 'beğendim' : 'beğenmedim'} · değiştirebilirsin` : locked ? (state.mode === 'shared' ? 'ortak karar işlendi' : `bu model ${state.participant || 'senin'} tarafından puanlandı`) : 'sola geç · sağa beğen'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div>
     </div>`;
-  card.querySelectorAll('[data-vote]').forEach((button) => button.addEventListener('click', () => castVote(row, button.dataset.vote)));
+  card.tabIndex = 0;
+  $('#nextCard').innerHTML = previewMarkup(nextRow(row));
+  bindCardGestures(card, row, locked);
+}
+
+function renderDecisionDock() {
+  const row = currentRow();
+  const locked = row && isVoted(row) && !(state.mode === 'personal' && state.editingId === row.id);
+  const disabled = !row || locked || state.busy;
+  $('#dislikeButton').disabled = disabled;
+  $('#likeButton').disabled = disabled;
+  $('#dislikeButton').classList.toggle('pending', state.busy);
+  $('#likeButton').classList.toggle('pending', state.busy);
+  $('#undoVote').disabled = state.mode !== 'personal' || !state.history.length || state.busy;
+  $('#undoVote').classList.toggle('hidden', state.mode !== 'personal');
 }
 
 function renderStats() {
@@ -206,7 +244,7 @@ function renderFilters() {
 }
 
 function render() {
-  renderMode(); renderFilters(); renderStats(); renderRecent(); renderCard();
+  renderMode(); renderFilters(); renderStats(); renderRecent(); renderCard(); renderDecisionDock();
 }
 
 function toast(message) {
@@ -264,8 +302,7 @@ async function persistVote(row, vote) {
     return true;
   } catch (error) {
     state.writeAvailable = false;
-    setConnection('demo', 'yerel önizleme');
-    toast('Demo kaydı yapıldı; bu deploy’da Sheet write endpoint’i henüz bağlı değil.');
+    setConnection('demo', 'kayıt başarısız');
     return false;
   }
 }
@@ -274,48 +311,156 @@ async function castVote(row, vote) {
   if (state.mode === 'personal' && !state.participant) {
     $('#participant').focus(); toast('Önce adını veya rumuzunu yaz.'); return;
   }
-  if (isVoted(row)) return;
+  const revisiting = state.mode === 'personal' && state.editingId === row.id;
+  if (isVoted(row) && !revisiting) return;
   const previous = state.mode === 'shared' ? row.like : state.myVotes[row.id];
+  const previousVote = state.mode === 'shared' ? (isLiked(previous) ? 'like' : isDisliked(previous) ? 'dislike' : '') : previous;
+  if (revisiting && previousVote === vote) {
+    state.editingId = null;
+    state.currentId = null;
+    render();
+    toast('Kararın değişmedi. Sıraya devam edebilirsin.');
+    return;
+  }
+  state.busy = true;
+  setConnection('', 'karar kaydediliyor');
   if (state.mode === 'shared') row.like = voteLabel(vote);
   else {
     state.myVotes[row.id] = vote;
     localStorage.setItem('print-lab-votes', JSON.stringify(state.myVotes));
   }
-  state.recent = [{ name: row['Model'], vote }, ...state.recent.filter((item) => item.name !== row['Model'])].slice(0, 10);
+  state.editingId = null;
+  state.currentId = null;
   render();
   const saved = await persistVote(row, vote);
   if (!saved) {
     if (state.mode === 'shared') row.like = previous;
     else if (previous) state.myVotes[row.id] = previous; else delete state.myVotes[row.id];
     localStorage.setItem('print-lab-votes', JSON.stringify(state.myVotes));
-    render();
+    state.currentId = row.id;
+    state.editingId = previous && state.mode === 'personal' ? row.id : null;
+    toast('Karar Sheet’e kaydedilemedi. Değişiklik geri alındı; tekrar deneyebilirsin.');
   } else {
-    toast('Karar Sheet’e işlendi.');
-    const next = visibleRows()[0];
-    if (next) { state.currentId = next.id; render(); }
+    state.recent = [{ id: row.id, name: row['Model'], vote }, ...state.recent.filter((item) => item.id !== row.id)].slice(0, 10);
+    if (state.mode === 'personal') {
+      state.history = [{ id: row.id, name: row['Model'], vote, previous: previousVote }, ...state.history.filter((item) => item.id !== row.id)].slice(0, 20);
+    }
+    toast(revisiting ? 'Kararın güncellendi.' : 'Karar Sheet’e işlendi.');
   }
+  state.busy = false;
+  render();
+}
+
+function animateVote(vote) {
+  const row = currentRow();
+  if (!row || state.busy) return;
+  const revisiting = state.mode === 'personal' && state.editingId === row.id;
+  if (isVoted(row) && !revisiting) return;
+  if (state.mode === 'personal' && !state.participant) {
+    $('#participant').focus();
+    toast('Önce adını veya rumuzunu yaz.');
+    return;
+  }
+  state.busy = true;
+  renderDecisionDock();
+  const card = $('#modelCard');
+  const direction = vote === 'like' ? 1 : -1;
+  card.classList.remove('dragging');
+  card.classList.add('swipe-out');
+  card.style.transform = `translate3d(${direction * Math.max(window.innerWidth, 760)}px, -18px, 0) rotate(${direction * 16}deg)`;
+  card.style.opacity = '0';
+  window.setTimeout(() => {
+    state.busy = false;
+    castVote(row, vote);
+  }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220);
+}
+
+function bindCardGestures(card, row, locked) {
+  if (locked) return;
+  let pointerId = null;
+  let startX = 0;
+  let startY = 0;
+  let horizontal = false;
+
+  const reset = () => {
+    pointerId = null;
+    horizontal = false;
+    card.classList.remove('dragging');
+    card.style.transform = '';
+    card.querySelectorAll('.swipe-stamp').forEach((stamp) => { stamp.style.opacity = ''; });
+  };
+
+  card.addEventListener('pointerdown', (event) => {
+    if (state.busy || event.button !== 0 || event.target.closest('a, button, input, select')) return;
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startY = event.clientY;
+    card.setPointerCapture(pointerId);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== pointerId) return;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (!horizontal && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { reset(); return; }
+    if (Math.abs(dx) > 7) horizontal = true;
+    if (!horizontal) return;
+    event.preventDefault();
+    const rotation = Math.max(-12, Math.min(12, dx / 18));
+    card.style.transform = `translate3d(${dx}px, ${Math.abs(dx) * -.025}px, 0) rotate(${rotation}deg)`;
+    const strength = Math.min(1, Math.max(0, (Math.abs(dx) - 20) / 90));
+    card.querySelector('.swipe-stamp.like').style.opacity = dx > 0 ? String(strength) : '0';
+    card.querySelector('.swipe-stamp.dislike').style.opacity = dx < 0 ? String(strength) : '0';
+  });
+  const release = (event) => {
+    if (event.pointerId !== pointerId) return;
+    const dx = event.clientX - startX;
+    const threshold = Math.min(120, card.clientWidth * .22);
+    if (horizontal && Math.abs(dx) >= threshold) {
+      pointerId = null;
+      animateVote(dx > 0 ? 'like' : 'dislike');
+    } else reset();
+  };
+  card.addEventListener('pointerup', release);
+  card.addEventListener('pointercancel', reset);
+}
+
+function revisitLastVote() {
+  if (state.mode !== 'personal' || state.busy || !state.history.length) return;
+  const [last, ...rest] = state.history;
+  state.history = rest;
+  state.editingId = last.id;
+  state.currentId = last.id;
+  render();
+  $('#modelCard').focus({ preventScroll: true });
+  toast('Son karar açıldı. Sola veya sağa kaydırarak değiştirebilirsin.');
 }
 
 function bindEvents() {
   document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', async () => {
-    state.mode = button.dataset.mode; state.filter = 'pending'; state.currentId = null;
+    if (state.busy) return;
+    state.mode = button.dataset.mode; state.filter = 'pending'; state.currentId = null; state.editingId = null;
     localStorage.setItem('print-lab-mode', state.mode); render();
     if (state.mode === 'personal' && state.participant) await loadParticipantVotes();
   }));
-  document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => { state.filter = button.dataset.filter; state.currentId = null; render(); }));
+  document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => { if (state.busy) return; state.filter = button.dataset.filter; state.currentId = null; state.editingId = null; render(); }));
   $('#saveParticipant').addEventListener('click', async () => {
+    if (state.busy) return;
     const value = $('#participant').value.trim();
     if (!value) { toast('Bir ad veya rumuz yaz.'); return; }
     state.participant = value; localStorage.setItem('print-lab-participant', value); state.currentId = null; await loadParticipantVotes(); toast(`${value} için kişisel puanlama açıldı.`);
   });
   $('#participant').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('#saveParticipant').click(); });
-  $('#search').addEventListener('input', (event) => { state.search = event.target.value; state.currentId = null; render(); });
-  $('#sort').addEventListener('change', (event) => { state.sort = event.target.value; state.currentId = null; render(); });
-  $('#resetSession').addEventListener('click', () => { state.recent = []; render(); toast('Oturum özeti temizlendi. Sheet kararları korunur.'); });
+  $('#search').addEventListener('input', (event) => { if (state.busy) return; state.search = event.target.value; state.currentId = null; state.editingId = null; render(); });
+  $('#sort').addEventListener('change', (event) => { if (state.busy) return; state.sort = event.target.value; state.currentId = null; state.editingId = null; render(); });
+  $('#dislikeButton').addEventListener('click', () => animateVote('dislike'));
+  $('#likeButton').addEventListener('click', () => animateVote('like'));
+  $('#undoVote').addEventListener('click', revisitLastVote);
+  $('#resetSession').addEventListener('click', () => { state.recent = []; state.history = []; state.editingId = null; render(); toast('Oturum özeti temizlendi. Sheet kararları korunur.'); });
   document.addEventListener('keydown', (event) => {
     if (event.target.matches('input, select')) return;
-    if (event.key === 'ArrowLeft') { const row = currentRow(); if (row) castVote(row, 'dislike'); }
-    if (event.key === 'ArrowRight') { const row = currentRow(); if (row) castVote(row, 'like'); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); animateVote('dislike'); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); animateVote('like'); }
   });
 }
 
