@@ -131,6 +131,18 @@ export class PersistentVoteQueue {
     this.persist(); void this.pump();
   }
 
+  reconcileVotes(serverVotes = {}) {
+    const before = this.items.length;
+    this.items = this.items.filter((item) => {
+      const id = item.payload?.id;
+      const action = item.payload?.action || 'vote';
+      if (!id) return false;
+      if (action === 'undo') return Boolean(serverVotes[id]);
+      return serverVotes[id] !== item.payload?.vote;
+    });
+    if (this.items.length !== before) this.persist();
+  }
+
   async pump() {
     if (this.running || !this.online || !this.send) return;
     const item = this.items.find((candidate) => candidate.status === 'pending');
@@ -397,7 +409,9 @@ if (isBrowser) {
       const response = await fetch(`${API_URL}?participant=${encodeURIComponent(participant)}`, { cache: 'no-store' }); const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.message || data.error);
       if (state.participant !== participant) return;
-      state.myVotes = { ...(data.votes || {}) }; applyQueuedVotes(); saveVotes(participant); setConnection('live', 'Sheet canlı');
+      const serverVotes = { ...(data.votes || {}) };
+      state.queue.reconcileVotes(serverVotes);
+      state.myVotes = serverVotes; applyQueuedVotes(); saveVotes(participant); setConnection('live', 'Sheet canlı');
     } catch { if (state.participant === participant) setConnection(state.queueStatus.total ? 'warning' : 'error', state.queueStatus.total ? 'eşitleme bekliyor' : 'oylar okunamadı'); }
     render();
   }

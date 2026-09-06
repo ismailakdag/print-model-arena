@@ -54,6 +54,16 @@ test('offline queue deduplicates the latest vote for one participant and model',
   assert.equal(queue.snapshot().items[0].payload.vote, 'dislike');
 });
 
+test('server readback clears queue entries already reflected in the Sheet', () => {
+  const storage = memoryStorage();
+  const queue = new PersistentVoteQueue({ storage, send: async () => {}, });
+  queue.setOnline(false);
+  queue.enqueue({ mode: 'personal', participant: 'Ada', id: 'm1', vote: 'like' });
+  queue.enqueue({ action: 'undo', mode: 'personal', participant: 'Ada', id: 'm2' });
+  queue.reconcileVotes({ m1: 'like' });
+  assert.equal(queue.snapshot().total, 0);
+});
+
 test('a failed write remains persisted and is safely retried after reload', async () => {
   const storage = memoryStorage();
   const permanent = new Error('rejected'); permanent.retryable = false;
