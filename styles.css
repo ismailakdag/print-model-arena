@@ -92,8 +92,8 @@ select { min-height:42px; padding:9px 30px 9px 10px; border-radius:10px; font-si
 .swipe-stamp { position:absolute; z-index:6; top:42%; display:grid; place-items:center; align-content:center; gap:7px; width:154px; height:154px; border:4px solid currentColor; border-radius:34px; opacity:0; color:white; background:rgba(13,15,13,.2); backdrop-filter:blur(5px); font:800 17px/1 "DM Mono",monospace; letter-spacing:.06em; text-transform:uppercase; pointer-events:none; filter:drop-shadow(0 0 22px currentColor); transition:opacity .06s linear; }
 .swipe-stamp small { font-size:9px; letter-spacing:.04em; }
 .stamp-icon { font:800 62px/.75 Manrope,sans-serif; }
-.swipe-stamp.dislike { left:10%; color:#ff7659; transform:translateY(-50%) rotate(-12deg) scale(var(--stamp-scale,.68)); }
-.swipe-stamp.like { right:10%; color:var(--like-bright); transform:translateY(-50%) rotate(12deg) scale(var(--stamp-scale,.68)); }
+.swipe-stamp.dislike { left:clamp(12px,8%,72px); right:auto; color:#ff7659; transform-origin:0 50%; transform:translateY(-50%) rotate(-12deg) scale(var(--stamp-scale,.68)); }
+.swipe-stamp.like { right:clamp(12px,8%,72px); left:auto; color:var(--like-bright); transform-origin:100% 50%; transform:translateY(-50%) rotate(12deg) scale(var(--stamp-scale,.68)); }
 .model-card[data-swipe-direction="like"] .swipe-stamp.like,.model-card[data-swipe-direction="dislike"] .swipe-stamp.dislike { opacity:var(--swipe-strength); }
 .model-card.releasing .swipe-stamp { animation:stamp-release .28s cubic-bezier(.15,.85,.25,1.2) both; }
 @keyframes stamp-release { 45% { transform:translateY(-50%) rotate(0) scale(1.18); } 100% { opacity:1; } }
@@ -255,8 +255,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
   .card-footer>span { display:none; }
   .card-footer a { padding:6px; }
   .swipe-stamp { top:38%; width:116px; height:116px; border-radius:29px; }
-  .swipe-stamp.dislike { left:7%; }
-  .swipe-stamp.like { right:7%; }
+  .swipe-stamp.dislike { left:12px; right:auto; }
+  .swipe-stamp.like { right:12px; left:auto; }
   .stamp-icon { font-size:53px; }
   .decision-dock { position:sticky; bottom:0; min-height:92px; margin:0 -12px; padding:12px 12px max(10px,env(safe-area-inset-bottom)); background:linear-gradient(180deg,transparent,var(--paper) 32%); }
   .decision-button { width:128px; height:68px; padding:0 11px; gap:7px; border-radius:21px; }
