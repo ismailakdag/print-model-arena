@@ -178,7 +178,7 @@ if (isBrowser) {
     rows: [], sourceCount: 0, excludedCount: 0, loading: true,
     mode: 'personal',
     participant: (storage.getItem('print-lab-participant') || '').trim(), myVotes: {}, filter: 'pending', search: '', sort: 'queue', currentId: null,
-    recent: [], history: [], transitioning: false, sheetLive: false, loadError: null, queue: null,
+    recent: [], history: [], voteRevisions: new Map(), transitioning: false, sheetLive: false, loadError: null, queue: null,
     queueStatus: { total: 0, pending: 0, failed: 0, online: navigator.onLine },
   };
   const $ = (selector) => document.querySelector(selector);
@@ -244,7 +244,7 @@ if (isBrowser) {
     if (!value) { $('#participantError').textContent = 'Devam etmek için bir ad veya rumuz yaz.'; input.focus(); return; }
     const changed = value !== state.participant;
     state.participant = value; storage.setItem('print-lab-participant', value); state.currentId = null;
-    if (changed) { state.history = []; state.recent = []; }
+    if (changed) { state.history = []; state.recent = []; state.voteRevisions = new Map(); }
     closeParticipantModal(); void loadParticipantVotes(); render();
     toast(`${writeTarget()} hazır.`);
   }
@@ -404,6 +404,7 @@ if (isBrowser) {
   async function loadParticipantVotes() {
     if (state.mode !== 'personal' || !state.participant) return;
     const participant = state.participant;
+    const revisionsAtRequest = new Map(state.voteRevisions);
     state.myVotes = safeJson(voteStorageKey(participant), {}); applyQueuedVotes(); render();
     try {
       const response = await fetch(`${API_URL}?participant=${encodeURIComponent(participant)}`, { cache: 'no-store' }); const data = await response.json();
@@ -411,7 +412,12 @@ if (isBrowser) {
       if (state.participant !== participant) return;
       const serverVotes = { ...(data.votes || {}) };
       state.queue.reconcileVotes(serverVotes);
-      state.myVotes = serverVotes; applyQueuedVotes(); saveVotes(participant); setConnection('live', 'Sheet canlı');
+      const mergedVotes = { ...serverVotes };
+      for (const [id, revision] of state.voteRevisions) {
+        if (revision <= (revisionsAtRequest.get(id) || 0)) continue;
+        if (state.myVotes[id]) mergedVotes[id] = state.myVotes[id]; else delete mergedVotes[id];
+      }
+      state.myVotes = mergedVotes; applyQueuedVotes(); saveVotes(participant); setConnection('live', 'Sheet canlı');
     } catch { if (state.participant === participant) setConnection(state.queueStatus.total ? 'warning' : 'error', state.queueStatus.total ? 'eşitleme bekliyor' : 'oylar okunamadı'); }
     render();
   }
@@ -419,6 +425,7 @@ if (isBrowser) {
   function optimisticVote(row, vote) {
     const previous = state.myVotes[row.id] || '';
     state.myVotes[row.id] = vote; saveVotes();
+    state.voteRevisions.set(row.id, (state.voteRevisions.get(row.id) || 0) + 1);
     if (state.mode === 'personal') state.history = [{ id: row.id, name: row.Model, vote, previous }, ...state.history.filter((item) => item.id !== row.id)].slice(0, 20);
     state.recent = [{ id: row.id, name: row.Model, vote }, ...state.recent.filter((item) => item.id !== row.id)].slice(0, 10);
     state.queue.enqueue({ action: 'vote', mode: state.mode, participant: state.participant, id: row.id, vote }); renderStats(); renderRecent(); renderQueue();
@@ -428,11 +435,11 @@ if (isBrowser) {
   function animateVote(vote) {
     const row = currentRow(); if (!row || state.transitioning || isVoted(row)) return;
     if (state.mode === 'personal' && !state.participant) { $('#participant').focus(); toast('Önce adını veya rumuzunu yaz.'); return; }
-    state.transitioning = true; optimisticVote(row, vote);
+    state.transitioning = true; optimisticVote(row, vote); const nextId = nextRow(row)?.id || null;
     const card = $('#modelCard'); const direction = vote === 'like' ? 1 : -1;
     card.dataset.swipeDirection = vote; card.style.setProperty('--swipe-strength', '1'); card.style.setProperty('--stamp-scale', '1.04');
     card.classList.add('swipe-out', 'releasing', vote); card.style.transform = `translate3d(${direction * Math.max(innerWidth, 760)}px, -22px, 0) rotate(${direction * 17}deg)`; card.style.opacity = '0';
-    setTimeout(() => { state.transitioning = false; state.currentId = null; render(); }, reducedMotion() ? 0 : 280);
+    setTimeout(() => { state.transitioning = false; state.currentId = nextId; render(); }, reducedMotion() ? 0 : 280);
   }
 
   function tapVote(vote, button) {
@@ -448,6 +455,7 @@ if (isBrowser) {
     const [last, ...rest] = state.history; state.history = rest;
     if (last.previous) { state.myVotes[last.id] = last.previous; state.queue.enqueue({ action: 'vote', mode: 'personal', participant: state.participant, id: last.id, vote: last.previous }); }
     else { delete state.myVotes[last.id]; state.queue.enqueue({ action: 'undo', mode: 'personal', participant: state.participant, id: last.id }); }
+    state.voteRevisions.set(last.id, (state.voteRevisions.get(last.id) || 0) + 1);
     saveVotes(); state.recent = state.recent.filter((item) => item.id !== last.id); state.currentId = last.id; render();
     $('#modelCard').focus({ preventScroll: true }); toast(`${last.name} · geri alındı · ${writeTarget()} · bekliyor`);
   }
