@@ -1,4 +1,4 @@
-const allowedModes = new Set(['personal', 'shared']);
+const allowedModes = new Set(['personal']);
 const allowedVotes = new Set(['like', 'dislike']);
 const MAX_PARTICIPANT_LENGTH = 40;
 const MAX_ID_LENGTH = 160;

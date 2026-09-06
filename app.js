@@ -93,7 +93,7 @@ export class PersistentVoteQueue {
     try {
       const parsed = JSON.parse(this.storage?.getItem(this.storageKey) || '[]');
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => item?.payload?.id && ['personal', 'shared'].includes(item.payload.mode))
+      return parsed.filter((item) => item?.payload?.id && item.payload.mode === 'personal')
         .map((item) => ({ ...item, status: 'pending' }));
     } catch { return []; }
   }
@@ -162,7 +162,7 @@ if (isBrowser) {
   const savedMode = storage.getItem('print-lab-mode');
   const state = {
     rows: [], sourceCount: 0, excludedCount: 0, loading: true,
-    mode: ['personal', 'shared'].includes(savedMode) ? savedMode : 'personal',
+    mode: 'personal',
     participant: storage.getItem('print-lab-participant') || '', myVotes: {}, filter: 'pending', search: '', sort: 'queue', currentId: null,
     recent: [], history: [], transitioning: false, sheetLive: false, loadError: null, queue: null,
     queueStatus: { total: 0, pending: 0, failed: 0, online: navigator.onLine },
@@ -173,7 +173,7 @@ if (isBrowser) {
   const saveVotes = () => storage.setItem(voteStorageKey(), JSON.stringify(state.myVotes));
   const isLiked = (value) => String(value).toLocaleLowerCase('tr-TR').includes('beğendim');
   const isDisliked = (value) => String(value).toLocaleLowerCase('tr-TR').includes('beğenmedim');
-  const isVoted = (row) => state.mode === 'shared' ? Boolean(row.like) : Boolean(state.myVotes[row.id]);
+  const isVoted = (row) => Boolean(state.myVotes[row.id]);
   const voteLabel = (vote) => vote === 'like' ? '👍 beğendim' : '👎 beğenmedim';
   const formatMoney = (value) => value == null ? '—' : money.format(value);
   const formatPercent = (value) => value == null ? '—' : `${value.toFixed(1).replace('.', ',')}%`;
@@ -206,8 +206,8 @@ if (isBrowser) {
   }
 
   function counts() {
-    const liked = state.rows.filter((row) => state.mode === 'shared' ? isLiked(row.like) : state.myVotes[row.id] === 'like').length;
-    const disliked = state.rows.filter((row) => state.mode === 'shared' ? isDisliked(row.like) : state.myVotes[row.id] === 'dislike').length;
+    const liked = state.rows.filter((row) => state.myVotes[row.id] === 'like').length;
+    const disliked = state.rows.filter((row) => state.myVotes[row.id] === 'dislike').length;
     return { liked, disliked, pending: Math.max(0, state.rows.length - liked - disliked) };
   }
 
@@ -245,7 +245,7 @@ if (isBrowser) {
     const card = $('#modelCard'); card.className = 'model-card'; card.removeAttribute('style'); card.removeAttribute('tabindex');
     if (!row) { card.innerHTML = emptyMarkup(); $('#nextCard').innerHTML = ''; return; }
     const locked = isVoted(row);
-    const currentVote = state.mode === 'shared' ? (isLiked(row.like) ? 'like' : isDisliked(row.like) ? 'dislike' : '') : state.myVotes[row.id] || '';
+    const currentVote = state.myVotes[row.id] || '';
     card.innerHTML = `
       <div class="swipe-wash dislike" aria-hidden="true"></div><div class="swipe-wash like" aria-hidden="true"></div>
       <div class="swipe-stamp dislike" aria-hidden="true">GEÇ</div><div class="swipe-stamp like" aria-hidden="true">BEĞEN</div>
@@ -271,7 +271,7 @@ if (isBrowser) {
     $('#statImages').textContent = state.loading ? '—' : state.rows.length; $('#excludedCount').textContent = state.excludedCount;
     const done = state.rows.length ? ((state.rows.length - pending) / state.rows.length) * 100 : 0;
     $('#progressLabel').textContent = `${state.rows.length - pending} / ${state.rows.length}`; $('#progressFill').style.width = `${done}%`;
-    $('#progressHint').textContent = state.mode === 'shared' ? 'ortak kararlar' : `${state.participant || 'isim gir'} için kararlar`;
+    $('#progressHint').textContent = `${state.participant || 'isim gir'} için kararlar`;
     $('#sessionNumber').textContent = state.recent.length; $('#sessionCopy').textContent = state.recent.length ? `${state.recent.length} karar anında uygulandı.` : 'Bu oturumda henüz karar yok.';
     $('#sessionBar').style.width = `${Math.min(100, state.recent.length * 10)}%`;
   }
@@ -303,14 +303,14 @@ if (isBrowser) {
   function render() { renderChrome(); renderStats(); renderRecent(); renderQueue(); renderCard(); }
 
   function queuedVotesForCurrentIdentity() {
-    return state.queue.items.filter((item) => item.payload.mode === state.mode && (state.mode === 'shared' || item.payload.participant === state.participant));
+    return state.queue.items.filter((item) => item.payload.mode === 'personal' && item.payload.participant === state.participant);
   }
 
   function applyQueuedVotes() {
     for (const item of queuedVotesForCurrentIdentity()) {
       const { action = 'vote', id, vote } = item.payload;
       if (state.mode === 'personal') { if (action === 'undo') delete state.myVotes[id]; else state.myVotes[id] = vote; }
-      else if (action !== 'undo') { const row = state.rows.find((candidate) => candidate.id === id); if (row) row.like = voteLabel(vote); }
+
     }
     if (state.mode === 'personal' && state.participant) saveVotes();
   }
@@ -348,7 +348,7 @@ if (isBrowser) {
 
   function optimisticVote(row, vote) {
     const previous = state.myVotes[row.id] || '';
-    if (state.mode === 'shared') row.like = voteLabel(vote); else { state.myVotes[row.id] = vote; saveVotes(); }
+    state.myVotes[row.id] = vote; saveVotes();
     if (state.mode === 'personal') state.history = [{ id: row.id, name: row.Model, vote, previous }, ...state.history.filter((item) => item.id !== row.id)].slice(0, 20);
     state.recent = [{ id: row.id, name: row.Model, vote }, ...state.recent.filter((item) => item.id !== row.id)].slice(0, 10);
     state.queue.enqueue({ action: 'vote', mode: state.mode, participant: state.participant, id: row.id, vote }); renderStats(); renderRecent(); renderQueue();

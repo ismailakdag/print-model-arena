@@ -19,6 +19,6 @@ test('Apps Script contract includes named participant columns, legacy compatibil
   assert.match(appsScript, /ensureParticipantColumn_/);
   assert.match(appsScript, /mirrorLegacyVote_/);
   assert.match(appsScript, /participantCell\.clearContent\(\)/);
-  assert.match(appsScript, /shared_vote_locked/);
+  assert.match(appsScript, /shared_mode_disabled/);
   assert.match(appsScript, /contractVersion: 2/);
 });

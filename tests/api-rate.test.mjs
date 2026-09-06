@@ -97,7 +97,7 @@ test('optimistic queue contract forwards operation id and contract version', asy
   };
   const handler = await loadHandler();
   const res = responseMock();
-  await handler({ method: 'POST', body: { mode: 'shared', id: 'm1', vote: 'like', operationId: 'op-123' } }, res);
+  await handler({ method: 'POST', body: { mode: 'personal', participant: 'tester', id: 'm1', vote: 'like', operationId: 'op-123' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.operationId, 'op-123');
 });
@@ -113,19 +113,15 @@ test('oversized queue identifiers are rejected without an upstream write', async
   assert.equal(res.body.code, 'payload_too_long');
 });
 
-test('Apps Script shared lock is exposed as a non-retryable conflict', async () => {
+test('shared writes are disabled without contacting Apps Script', async () => {
   process.env.SHEET_WRITE_URL = 'https://script.google.com/macros/s/deployment/exec';
   process.env.SHEET_WRITE_SECRET = 'test-secret';
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    async text() { return JSON.stringify({ ok: false, code: 'shared_vote_locked', error: 'locked' }); },
-  });
+  globalThis.fetch = async () => { throw new Error('must not be called'); };
   const handler = await loadHandler();
   const res = responseMock();
   await handler({ method: 'POST', body: { mode: 'shared', id: 'm1', vote: 'dislike', operationId: 'op-locked' } }, res);
-  assert.equal(res.statusCode, 409);
-  assert.equal(res.body.code, 'shared_vote_locked');
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, 'invalid_vote_payload');
 });
 
 test('malformed JSON is rejected before contacting the upstream', async () => {

@@ -169,6 +169,7 @@ function doPost(e) {
     if (mode !== 'personal' || !id || !participant) return json_({ ok: false, code: 'invalid_undo', error: 'geri alma için personal mod, participant ve id gerekli' });
   } else if (!id || ['like', 'dislike'].indexOf(vote) < 0) return json_({ ok: false, code: 'invalid_vote', error: 'geçersiz oy' });
   if (mode === 'personal' && !participant) return json_({ ok: false, code: 'participant_required', error: 'personal modda participant gerekli' });
+  if (mode !== 'personal') return json_({ ok: false, code: 'shared_mode_disabled', error: 'ortak yazma bu sürümde kapalı' });
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
