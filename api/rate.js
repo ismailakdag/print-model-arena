@@ -1,5 +1,8 @@
 const allowedModes = new Set(['personal', 'shared']);
 const allowedVotes = new Set(['like', 'dislike']);
+const MAX_PARTICIPANT_LENGTH = 40;
+const MAX_ID_LENGTH = 160;
+const MAX_OPERATION_ID_LENGTH = 100;
 
 function configState() {
   return {
@@ -87,6 +90,7 @@ export default async function handler(req, res) {
       if (String(req.query?.status || '') === '1') return statusHandler(res, endpoint, secret);
       const participant = String(req.query?.participant || '').trim();
       if (!participant) return send(res, 400, { ok: false, code: 'participant_required', message: 'Kişisel oyları okumak için participant gerekli.' });
+      if (participant.length > MAX_PARTICIPANT_LENGTH) return send(res, 400, { ok: false, code: 'participant_too_long', message: 'participant en fazla 40 karakter olabilir.' });
       const url = new URL(endpoint);
       url.searchParams.set('action', 'list');
       url.searchParams.set('participant', participant);
@@ -102,14 +106,20 @@ export default async function handler(req, res) {
       try { body = parseBody(req.body); } catch { return send(res, 400, { ok: false, code: 'invalid_json', message: 'İstek gövdesi geçerli JSON değil.' }); }
       const action = String(body?.action || 'vote');
       if (!['vote', 'undo'].includes(action)) return send(res, 400, { ok: false, code: 'invalid_action', message: 'action vote veya undo olmalı.' });
-      const validBase = body && String(body.mode) === 'personal' && String(body.id || '').trim() && String(body.participant || '').trim();
-      const validVote = allowedModes.has(String(body?.mode || '')) && allowedVotes.has(String(body?.vote || '')) && String(body?.id || '').trim();
+      const participant = String(body?.participant || '').trim();
+      const id = String(body?.id || '').trim();
+      const operationId = String(body?.operationId || '').trim();
+      const validBase = body && String(body.mode) === 'personal' && id && participant;
+      const validVote = allowedModes.has(String(body?.mode || '')) && allowedVotes.has(String(body?.vote || '')) && id;
       if (action === 'undo' && !validBase) return send(res, 400, { ok: false, code: 'invalid_undo_payload', message: 'Geri alma için personal mode, participant ve id gerekli.' });
       if (action !== 'undo' && !validVote) return send(res, 400, { ok: false, code: 'invalid_vote_payload', message: 'Oy isteğinde mode, id ve vote alanları geçerli olmalı.' });
-      if (action !== 'undo' && String(body.mode) === 'personal' && !String(body.participant || '').trim()) {
+      if (action !== 'undo' && String(body.mode) === 'personal' && !participant) {
         return send(res, 400, { ok: false, code: 'participant_required', message: 'Kişisel oy için participant gerekli.' });
       }
-      const payload = { action, mode: String(body.mode), participant: String(body.participant || '').trim(), id: String(body.id).trim(), vote: body.vote ? String(body.vote) : undefined, secret };
+      if (participant.length > MAX_PARTICIPANT_LENGTH || id.length > MAX_ID_LENGTH || operationId.length > MAX_OPERATION_ID_LENGTH) {
+        return send(res, 400, { ok: false, code: 'payload_too_long', message: 'Oy isteğindeki alanlardan biri izin verilen uzunluğu aşıyor.' });
+      }
+      const payload = { action, mode: String(body.mode), participant, id, vote: body.vote ? String(body.vote) : undefined, operationId: operationId || undefined, contractVersion: 2, secret };
       let upstream;
       let data;
       try {
@@ -122,7 +132,11 @@ export default async function handler(req, res) {
         return send(res, 502, { ok: false, code: 'upstream_unreachable', message: 'Apps Script yazma servisine ulaşılamadı. Deployment URL’sini ve Vercel Production env ayarlarını kontrol edin.' });
       }
       if (!data) return send(res, 502, { ok: false, code: 'upstream_invalid_json', message: 'Apps Script geçerli JSON döndürmedi.' });
-      if (!upstream.ok || data.ok !== true) return send(res, upstream.status === 409 ? 409 : 502, { ok: false, code: data.code || 'upstream_rejected', message: data.error || 'Apps Script isteği reddetti.' });
+      if (!upstream.ok || data.ok !== true) {
+        const conflict = data.code === 'shared_vote_locked' || upstream.status === 409;
+        const invalid = ['model_not_found', 'missing_columns', 'invalid_votes_sheet'].includes(data.code);
+        return send(res, conflict ? 409 : invalid ? 422 : 502, { ok: false, code: data.code || 'upstream_rejected', message: data.error || 'Apps Script isteği reddetti.' });
+      }
       return send(res, 200, data);
     }
 

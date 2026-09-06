@@ -12,10 +12,13 @@ test('deployment config targets Node 24 without legacy function runtime', () => 
   assert.equal(packageJson.scripts.test, 'node --test tests/*.test.mjs');
 });
 
-test('Apps Script contract includes status, personal replacement, undo, and shared locking', () => {
+test('Apps Script contract includes named participant columns, legacy compatibility, undo, and shared locking', () => {
   assert.match(appsScript, /action === 'status'/);
   assert.match(appsScript, /LockService\.getScriptLock\(\)/);
-  assert.match(appsScript, /votesSheet\.getRange\(i \+ 1, headers\['Oy'\]/);
-  assert.match(appsScript, /votesSheet\.deleteRow\(i \+ 1\)/);
-  assert.match(appsScript, /if \(String\(cell\.getValue\(\)\)\.trim\(\)\)/);
+  assert.match(appsScript, /PARTICIPANT_COLUMN_PREFIX = 'Oy · '/);
+  assert.match(appsScript, /ensureParticipantColumn_/);
+  assert.match(appsScript, /mirrorLegacyVote_/);
+  assert.match(appsScript, /participantCell\.clearContent\(\)/);
+  assert.match(appsScript, /shared_vote_locked/);
+  assert.match(appsScript, /contractVersion: 2/);
 });

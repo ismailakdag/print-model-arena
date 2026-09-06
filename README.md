@@ -6,10 +6,19 @@
 
 - Kartı mobilde sağa sürüklemek **beğendim**, sola sürüklemek **beğenmedim** demektir.
 - Desktop’ta mouse drag, büyük butonlar ve `ArrowLeft` / `ArrowRight` aynı oyu verir.
-- Başarılı oy sonrası otomatik olarak sıradaki bekleyen karta geçilir.
-- **Geri al** (`↶ geri al` veya `Z`) yalnızca kişisel moddaki bu oturumun son kararında çalışır. İlk oy ise satır silinir; daha önce oy varsa önceki oy geri yazılır. Böylece kart ve önceki oy tekrar görünür, kullanıcı fikrini değiştirebilir.
-- Kişisel mod `Oylamalar` sekmesinde tek satırı katılımcı + model kimliği ile günceller/değiştirir; ortak mod canonical `Beğeni` hücresini yalnızca boşsa yazar ve dolu satırı kilitli tutar.
+- Oy görsel olarak anında uygulanır ve kart ağ isteğini beklemeden sıradaki modele geçer.
+- **Geri al** (`↶ geri al` veya `Z`) yalnızca kişisel moddaki bu oturumun son kararında çalışır. Önceki oy yerelde anında geri gelir; gerekli update/undo işlemi kuyruğa alınır.
+- Kişisel oy, ana veri sekmesinde `Oy · <katılımcı>` adlı kolona modelin sabit satırında yazılır. `Oylamalar` sekmesi eski istemciler ve raporlar için eşzamanlı mirror olarak korunur.
+- Ortak mod canonical `Beğeni` hücresini yalnızca boşsa yazar ve dolu satırı kilitli tutar. Aynı oyla gelen ağ retry’ı idempotent başarı sayılır.
 - Paylaşılan Sheet verisi frontend’de yalnızca CSV olarak okunur; frontend’e secret gönderilmez.
+
+## Optimistic kayıt kuyruğu
+
+- Her karar `localStorage` içindeki kalıcı kuyruğa, benzersiz `operationId` ile önce yazılır; `fetch` kart geçişini veya sonraki oyu bloklamaz.
+- Aynı mod + katılımcı + model için henüz gönderilmemiş eski işlem son kararla değiştirilir. Gönderilmekte olan işlemin arkasına gelen undo/değişiklik sırasını korur.
+- Geçici ağ/5xx/429 hataları 1 saniyeden başlayan üstel backoff ile en fazla altı kez denenir. Kalıcı veya tükenen hata cihazda silinmez ve **yeniden dene** kontrolünde görünür.
+- Offline kararlar cihazda kalır ve `online` olayıyla yeniden gönderilir. Sayfa kapanırken kuyruk tekrar kalıcı depoya yazılır; reload sırasında bekleyen kararlar hem arayüze yeniden uygulanır hem gönderime devam eder.
+- Kuyrukta gerçek Sheet yazısı yapan test yoktur; testler sahte bir gönderici ve bellek depolaması kullanır.
 
 ## Veri kaynağı ve görüntü bulguları
 
@@ -21,10 +30,10 @@ Kaynak Sheet:
 
 - CSV HTTP 200, **410 model satırı**.
 - `Görsel URL` dolu **388 satır**; tamamı `drive.google.com` hostunda.
-- **22 satırda görsel URL’si yok**; bu satırlarda uygulama açıkça “Sheet’te görsel URL’si yok” durumunu gösterir.
-- Temsilî Drive `Görsel URL` ve `thumbnail?id=…&sz=w1200` fallback istekleri HTTP 200 ve `image/png`/`image/jpeg` döndürdü. Uygulama ilk URL başarısız olursa Drive thumbnail fallback dener; ikisi de başarısızsa dosyanın paylaşımı kontrol edilir.
+- **22 satırda görsel URL’si yok**. Bu satırlar desteye girmeden filtrelenir; model, ilerleme ve özet sayılarına kesinlikle dahil edilmez.
+- Temsilî Drive thumbnail istekleri HTTP 200 ve `image/png`/`image/jpeg` döndürdü. Bir URL tarayıcıda yine de yüklenemezse ilgili model desteden çıkarılır.
 - Drive dosyalarının uygulama tarafından görülebilmesi için dosyada **Genel erişim → Bağlantıya sahip herkes → Görüntüleyici** gerekir. İzinleri aşan bir proxy veya kaynak site scraping’i yoktur.
-- Kart görselleri `loading="lazy"` ile yüklenir; kartta `görsel hazır`, `thumbnail hazır`, `görsel erişilemiyor` durumlarından biri görünür.
+- Uygulama yalnızca geçerli `http:`/`https:` görsel URL’si olan satırları normalize eder. Hiçbiri kalmazsa kaynak satır sayısını belirten dürüst boş durum gösterir. Tarayıcıda yüklenemeyen bir görsel de desteden ve sayılardan çıkarılır.
 
 ## Vercel deploy
 
@@ -69,24 +78,25 @@ Value: <uzun, rastgele ve yalnızca sizde bulunan değer>
 7. Vercel Production `SHEET_WRITE_URL` ve `SHEET_WRITE_SECRET` değerlerini güncelleyin; sonra Vercel Production’ı yeniden deploy edin.
 8. Önce Vercel status endpoint’ini, sonra arayüzde gerçek kullanıcı olmayan bir akışla kontrol edin. Bu repo doğrulama sırasında gerçek Sheet’e test oyu yazmadı.
 
-Apps Script sözleşmesi:
+Apps Script sözleşmesi (v2; eski payload alanları geçerliliğini korur):
 
 - `GET /exec?action=status&secret=…` → güvenli hazır cevabı.
 - `GET /exec?action=list&participant=…&secret=…` → `{ ok: true, votes: { modelId: "like|dislike" } }`.
 - `POST /exec` JSON oy payload’ı:
 
 ```json
-{"mode":"personal","participant":"rumuz","id":"model-id","vote":"like","secret":"…"}
+{"mode":"personal","participant":"rumuz","id":"model-id","vote":"like","operationId":"uuid","contractVersion":2,"secret":"…"}
 ```
 
-- Kişisel değişiklikte aynı katılımcı + model satırı update/replace edilir; yeni modelde `Zaman | Kullanıcı | Model ID | Oy | Model` satırı append edilir.
+- Kişisel değişiklik ana sekmede `Oy · rumuz` kolonunun mevcut model satırını update eder; model satırları eklenmez, silinmez veya yeniden sıralanmaz. Aynı karar ayrıca `Oylamalar` içindeki `Zaman | Kullanıcı | Model ID | Oy | Model | İşlem ID` kaydına update/append edilir.
+- Kişisel liste okuması önce named column’u, eksikler için eski `Oylamalar` satırlarını kullanır. Böylece eski veri geriye dönük okunabilir.
 - Kişisel geri almada:
 
 ```json
 {"action":"undo","mode":"personal","participant":"rumuz","id":"model-id","secret":"…"}
 ```
 
-- Shared payload’ı yalnızca `Beğeni` boşsa yazar. Tüm shared/personal okuma-yazmalar `LockService.getScriptLock()` ile korunur.
+- Shared payload’ı yalnızca `Beğeni` boşsa yazar; aynı değerli retry başarı döner. Tüm shared/personal okuma-yazmalar `LockService.getScriptLock()` ile korunur.
 
 ## Yazma endpoint’i neden önce yanıltıcıydı?
 
@@ -119,7 +129,7 @@ python3 -m json.tool vercel.json
 npm test
 ```
 
-Testler gerçek Sheet’e veya Apps Script’e yazmaz; proxy contract, status/config diagnostics, invalid JSON, undo payload, swipe/keyboard/undo/image fallback ve Apps Script row/lock sözleşmesini kontrol eder.
+Testler gerçek Sheet’e veya Apps Script’e yazmaz; proxy contract, status/config diagnostics, invalid JSON, operation ID, görsel satır filtreleme, optimistic kalıcı kuyruk, deduplication, retry/backoff, reload recovery ve Apps Script named-column/legacy/lock sözleşmesini kontrol eder.
 
 ## Güvenlik ve sınırlar
 

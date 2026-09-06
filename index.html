@@ -48,7 +48,7 @@
             <input id="participant" type="text" maxlength="40" placeholder="ör. ismail" autocomplete="nickname">
             <button class="small-button" id="saveParticipant">başla</button>
           </div>
-          <span class="field-hint">Aynı model için aynı isimle ikinci oy verilemez.</span>
+          <span class="field-hint">Oyların ana Sheet’te adınla açılan kolonda tutulur; son kararını geri alabilirsin.</span>
         </div>
         <div class="shared-note hidden" id="sharedNote">Bu modda mevcut <b>Beğeni</b> doluysa model kilitlenir. Yalnız boşlar oylanır.</div>
       </section>
@@ -80,18 +80,18 @@
             </article>
           </div>
           <div class="decision-dock" aria-label="Karar kontrolleri">
-            <button class="undo-button" id="undoVote" type="button" disabled aria-label="Son karara geri dön">
-              <span aria-hidden="true">↶</span><small>geri</small>
+            <button class="undo-button" id="undoVote" type="button" disabled aria-label="Son kararı geri al">
+              <span aria-hidden="true">↶</span><small>geri al</small>
             </button>
             <button class="decision-button dislike" id="dislikeButton" type="button" aria-label="Beğenmedim, sola kaydır">
-              <span aria-hidden="true">×</span><small>beğenmedim</small>
+              <span aria-hidden="true">✕</span><small>geç</small>
             </button>
             <div class="swipe-instruction" aria-hidden="true"><span>←</span> kaydır <span>→</span></div>
             <button class="decision-button like" id="likeButton" type="button" aria-label="Beğendim, sağa kaydır">
               <span aria-hidden="true">♥</span><small>beğendim</small>
             </button>
           </div>
-          <p class="keyboard-hint">Masaüstünde sürükle veya <kbd>←</kbd> <kbd>→</kbd> tuşlarını kullan.</p>
+          <p class="keyboard-hint">Sürükle veya <kbd>←</kbd> geç · <kbd>→</kbd> beğen · <kbd>Z</kbd> geri al.</p>
         </div>
         <aside class="side-panel">
           <div class="side-card decision-card">
@@ -107,9 +107,14 @@
               <div><small>ortalama marj</small><strong id="statMargin">—</strong></div>
               <div><small>ortalama kâr</small><strong id="statProfit">—</strong></div>
               <div><small>görselli</small><strong id="statImages">—</strong></div>
+              <div><small>hariç tutulan</small><strong id="excludedCount">0</strong></div>
             </div>
           </div>
           <div class="side-card queue-card">
+            <div class="side-card-heading"><span>Sheet kuyruğu</span><button class="text-button hidden" id="retryQueue" type="button">yeniden dene</button></div>
+            <div id="queueStatus" class="queue-status synced" role="status"><strong>Tüm kararlar eşitlendi</strong><span>Bekleyen Sheet kaydı yok.</span></div>
+          </div>
+          <div class="side-card recent-card">
             <div class="side-card-heading"><span>son kararlar</span></div>
             <div id="recentList" class="recent-list"><span class="muted">Henüz karar yok.</span></div>
           </div>
@@ -120,6 +125,6 @@
     <footer class="footer"><span id="footerStatus">Sheet bağlantısı hazırlanıyor.</span><a href="https://docs.google.com/spreadsheets/d/1tJtASEdnz5HCUtkVqlTua-t2XoYGmHxL3FgJO7Y4UVI/edit" target="_blank" rel="noreferrer">kaynak Sheet ↗</a></footer>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
