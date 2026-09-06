@@ -30,6 +30,8 @@ test('left and right controls, gestures, and keys have one explicit vote mapping
   assert.match(css, /\.swipe-stamp\.like \{ right:/);
   assert.match(css, /\.swipe-stamp\.dislike \{[^}]*transform-origin:0 50%/);
   assert.match(css, /\.swipe-stamp\.like \{[^}]*transform-origin:100% 50%/);
+  assert.match(css, /data-swipe-direction="like"\].*\.swipe-stamp\.like \{ left:/);
+  assert.match(css, /data-swipe-direction="dislike"\].*\.swipe-stamp\.dislike \{ right:/);
   assert.match(app, /event\.key === 'ArrowLeft'.*VOTE_BY_DIRECTION\.left/);
   assert.match(app, /event\.key === 'ArrowRight'.*VOTE_BY_DIRECTION\.right/);
   assert.match(app, /dx > 0 \? VOTE_BY_DIRECTION\.right : VOTE_BY_DIRECTION\.left/);

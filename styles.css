@@ -94,7 +94,8 @@ select { min-height:42px; padding:9px 30px 9px 10px; border-radius:10px; font-si
 .stamp-icon { font:800 62px/.75 Manrope,sans-serif; }
 .swipe-stamp.dislike { left:clamp(12px,8%,72px); right:auto; color:#ff7659; transform-origin:0 50%; transform:translateY(-50%) rotate(-12deg) scale(var(--stamp-scale,.68)); }
 .swipe-stamp.like { right:clamp(12px,8%,72px); left:auto; color:var(--like-bright); transform-origin:100% 50%; transform:translateY(-50%) rotate(12deg) scale(var(--stamp-scale,.68)); }
-.model-card[data-swipe-direction="like"] .swipe-stamp.like,.model-card[data-swipe-direction="dislike"] .swipe-stamp.dislike { opacity:var(--swipe-strength); }
+.model-card[data-swipe-direction="like"] .swipe-stamp.like { left:clamp(12px,8%,72px); right:auto; transform-origin:0 50%; opacity:var(--swipe-strength); }
+.model-card[data-swipe-direction="dislike"] .swipe-stamp.dislike { right:clamp(12px,8%,72px); left:auto; transform-origin:100% 50%; opacity:var(--swipe-strength); }
 .model-card.releasing .swipe-stamp { animation:stamp-release .28s cubic-bezier(.15,.85,.25,1.2) both; }
 @keyframes stamp-release { 45% { transform:translateY(-50%) rotate(0) scale(1.18); } 100% { opacity:1; } }
 .model-visual { position:relative; width:100%; height:100%; overflow:hidden; background:#bdb5a9; }
