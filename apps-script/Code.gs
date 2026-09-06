@@ -126,16 +126,20 @@ function doGet(e) {
   const participant = String(params.participant || '').trim();
   if (!participant) return json_({ ok: false, code: 'participant_required', error: 'participant gerekli' });
 
-  const votes = {};
-  const dataValues = sheet_().getDataRange().getValues();
+  const dataSheet = sheet_();
+  const dataValues = dataSheet.getDataRange().getValues();
   const dataHeaders = headerMap_(dataValues);
-  const participantColumn = dataHeaders[participantHeader_(participant)];
-  if (participantColumn !== undefined && dataHeaders['Kimlik'] !== undefined) {
-    for (let i = 1; i < dataValues.length; i += 1) {
-      const vote = normalizedVote_(dataValues[i][participantColumn]);
-      const id = String(dataValues[i][dataHeaders['Kimlik']]).trim();
-      if (id && vote) votes[id] = vote;
-    }
+  if (dataHeaders['Kimlik'] === undefined) return json_({ ok: false, code: 'missing_columns', error: 'Kimlik kolonu yok' });
+  // Kullanıcı adı girildiğinde sütunu bir kez oluşturur; mevcut model satırları korunur.
+  const participantColumn = ensureParticipantColumn_(dataSheet, dataValues, participant);
+  const votes = {};
+  const rowsById = {};
+  for (let i = 1; i < dataValues.length; i += 1) {
+    const id = String(dataValues[i][dataHeaders['Kimlik']]).trim();
+    if (!id) continue;
+    rowsById[id] = i;
+    const vote = normalizedVote_(dataSheet.getRange(i + 1, participantColumn + 1).getValue());
+    if (vote) votes[id] = vote;
   }
 
   const legacySheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(VOTES_SHEET_NAME);
@@ -147,11 +151,18 @@ function doGet(e) {
         if (String(legacyValues[i][legacyHeaders['Kullanıcı']]).trim() !== participant) continue;
         const id = String(legacyValues[i][legacyHeaders['Model ID']]).trim();
         const vote = normalizedVote_(legacyValues[i][legacyHeaders['Oy']]);
-        if (id && vote && !votes[id]) votes[id] = vote;
+        if (id && vote && !votes[id]) {
+          votes[id] = vote;
+          const rowIndex = rowsById[id];
+          if (rowIndex !== undefined && !normalizedVote_(dataSheet.getRange(rowIndex + 1, participantColumn + 1).getValue())) {
+            dataSheet.getRange(rowIndex + 1, participantColumn + 1).setValue(vote);
+          }
+        }
       }
     }
   }
-  return json_({ ok: true, votes, storage: participantColumn === undefined ? 'legacy' : 'named-column', contractVersion: 2 });
+  SpreadsheetApp.flush();
+  return json_({ ok: true, votes, storage: 'named-column', contractVersion: 2 });
 }
 
 function doPost(e) {
