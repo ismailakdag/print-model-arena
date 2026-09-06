@@ -390,6 +390,17 @@ if (isBrowser) {
     state.sheetLive = true; setConnection('live', 'Sheet canlı'); return data;
   }
 
+  function flushQueueOnPageHide() {
+    if (!navigator.sendBeacon || !state.queue?.items.length) return;
+    for (const item of state.queue.items) {
+      if (!item?.payload?.id || item.payload.mode !== 'personal') continue;
+      const payload = { ...item.payload, operationId: item.operationId };
+      const accepted = navigator.sendBeacon(API_URL, new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+      if (accepted) item.status = 'sending';
+    }
+    state.queue.persist();
+  }
+
   async function loadSheet() {
     state.loading = true; render();
     try {
@@ -507,7 +518,7 @@ if (isBrowser) {
       if (event.target.matches('input, select, textarea')) return; if (event.key === 'ArrowLeft') { event.preventDefault(); animateVote(VOTE_BY_DIRECTION.left); } if (event.key === 'ArrowRight') { event.preventDefault(); animateVote(VOTE_BY_DIRECTION.right); } if (event.key.toLocaleLowerCase('tr-TR') === 'z') { event.preventDefault(); undoLastVote(); }
     });
     window.addEventListener('online', () => { state.queue.setOnline(true); setConnection('warning', 'eşitleniyor'); }); window.addEventListener('offline', () => { state.queue.setOnline(false); setConnection('offline', 'çevrimdışı'); });
-    window.addEventListener('pagehide', () => state.queue.persist());
+    window.addEventListener('pagehide', flushQueueOnPageHide, { capture: true });
   }
 
   setTheme(document.documentElement.dataset.theme);

@@ -45,3 +45,9 @@ test('write destination is visible in setup, controls, arena, queue, and vote fe
   assert.match(app, /toast\(`\$\{row\.Model\}.*\$\{writeTarget\(\)\} · bekliyor`\)/);
   assert.match(app, /toast\(`\$\{last\.name\} · geri alındı · \$\{writeTarget\(\)\} · bekliyor`\)/);
 });
+
+test('page close sends pending personal votes through the browser beacon path', () => {
+  assert.match(app, /function flushQueueOnPageHide\(\)/);
+  assert.match(app, /navigator\.sendBeacon\(API_URL/);
+  assert.match(app, /pagehide.*flushQueueOnPageHide/);
+});
