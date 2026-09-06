@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2eb">
+  <title>Print Model Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./">
+        <span class="brand-mark">PL</span>
+        <span>
+          <strong>print lab</strong>
+          <small>model arena</small>
+        </span>
+      </a>
+      <div class="connection-state" id="connectionState"><span class="state-dot"></span><span>yükleniyor</span></div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">3d print shortlist</p>
+          <h1>Hangisi üretime girmeli?</h1>
+          <p class="hero-copy">Modelleri tek tek değerlendir. Maliyet, satış fiyatı ve marj aynı ekranda; kararın doğrudan çalışma Sheet’ine işlenir.</p>
+        </div>
+        <div class="progress-block">
+          <span id="progressLabel">0 / 0</span>
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <small id="progressHint">karar bekleyenler</small>
+        </div>
+      </section>
+
+      <section class="control-panel" aria-label="Oylama ayarları">
+        <div class="mode-switch" role="tablist" aria-label="Oylama modu">
+          <button class="mode-button active" data-mode="personal" role="tab" aria-selected="true">kişisel puanım</button>
+          <button class="mode-button" data-mode="shared" role="tab" aria-selected="false">ortak puanlama</button>
+        </div>
+        <div class="participant-wrap" id="participantWrap">
+          <label for="participant">adın / rumuzun</label>
+          <div class="participant-input-row">
+            <input id="participant" type="text" maxlength="40" placeholder="ör. ismail" autocomplete="nickname">
+            <button class="small-button" id="saveParticipant">başla</button>
+          </div>
+          <span class="field-hint">Aynı model için aynı isimle ikinci oy verilemez.</span>
+        </div>
+        <div class="shared-note hidden" id="sharedNote">Bu modda mevcut <b>Beğeni</b> doluysa model kilitlenir. Yalnız boşlar oylanır.</div>
+      </section>
+
+      <section class="toolbar">
+        <div class="filter-tabs" role="tablist" aria-label="Model filtresi">
+          <button class="filter-button active" data-filter="pending">puanlanacaklar <span id="pendingCount">0</span></button>
+          <button class="filter-button" data-filter="all">tümü <span id="allCount">0</span></button>
+          <button class="filter-button" data-filter="liked">beğendiklerim <span id="likedCount">0</span></button>
+          <button class="filter-button" data-filter="disliked">beğenmediklerim <span id="dislikedCount">0</span></button>
+        </div>
+        <div class="toolbar-actions">
+          <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="model ara"></label>
+          <select id="sort" aria-label="Sıralama">
+            <option value="queue">sıra</option>
+            <option value="margin">marj yüksekten</option>
+            <option value="profit">kâr yüksekten</option>
+            <option value="cost">maliyet düşükten</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <article class="model-card" id="modelCard" aria-live="polite">
+          <div class="empty-state">Sheet okunuyor…</div>
+        </article>
+        <aside class="side-panel">
+          <div class="side-card decision-card">
+            <div class="side-card-heading"><span>oturum</span><button class="text-button" id="resetSession">sıfırla</button></div>
+            <div class="session-number" id="sessionNumber">0</div>
+            <p id="sessionCopy">Bu oturumda henüz karar yok.</p>
+            <div class="mini-bar"><span id="sessionBar"></span></div>
+          </div>
+          <div class="side-card stats-card">
+            <div class="side-card-heading"><span>özet</span><span class="live-label">live sheet</span></div>
+            <div class="stat-grid">
+              <div><small>modeller</small><strong id="statModels">—</strong></div>
+              <div><small>ortalama marj</small><strong id="statMargin">—</strong></div>
+              <div><small>ortalama kâr</small><strong id="statProfit">—</strong></div>
+              <div><small>görselli</small><strong id="statImages">—</strong></div>
+            </div>
+          </div>
+          <div class="side-card queue-card">
+            <div class="side-card-heading"><span>son kararlar</span></div>
+            <div id="recentList" class="recent-list"><span class="muted">Henüz karar yok.</span></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="footer"><span id="footerStatus">Sheet bağlantısı hazırlanıyor.</span><a href="https://docs.google.com/spreadsheets/d/1tJtASEdnz5HCUtkVqlTua-t2XoYGmHxL3FgJO7Y4UVI/edit" target="_blank" rel="noreferrer">kaynak Sheet ↗</a></footer>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
