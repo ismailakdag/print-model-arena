@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PersistentVoteQueue, hasUsableImageUrl, prepareRows } from '../app.js';
+import { PersistentVoteQueue, hasUsableImageUrl, normalizeRow, prepareRows } from '../app.js';
 
 function memoryStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -29,6 +29,11 @@ test('only rows with usable HTTP(S) image URLs enter the model deck and counts',
   assert.equal(hasUsableImageUrl('http://example.test/image.png'), true);
   assert.equal(hasUsableImageUrl('https://drive.google.com/thumbnail?id=abc&sz=w400'), true);
   assert.equal(hasUsableImageUrl('https://'), false);
+});
+
+test('frontend calculates cost-based markup without changing the Sheet schema', () => {
+  const row = normalizeRow({ Kimlik: 'markup', Model: 'Markup test', 'Maliyet TL/adet': '10', 'Satış fiyatı TL': '20', 'Net kâr TL': '10', Marj: '50%' }, 0);
+  assert.equal(row.markup, 100);
 });
 
 test('enqueue is immediate, durable, and does not wait for the network write', async () => {

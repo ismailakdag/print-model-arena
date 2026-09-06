@@ -65,7 +65,11 @@ export function normalizeRow(row, sourceIndex) {
     id: String(row.Kimlik || `${slugify(row.Model)}_${sourceIndex}`).trim(),
     index: sourceIndex,
     cost: numberValue(row['Maliyet TL/adet']), sale: numberValue(row['Satış fiyatı TL']),
-    profit: numberValue(row['Net kâr TL']), margin: percentValue(row.Marj), grams: numberValue(row.Gram),
+    profit: numberValue(row['Net kâr TL']), margin: percentValue(row.Marj),
+    markup: numberValue(row['Maliyet TL/adet']) > 0 && numberValue(row['Satış fiyatı TL']) != null
+      ? ((numberValue(row['Satış fiyatı TL']) - numberValue(row['Maliyet TL/adet'])) / numberValue(row['Maliyet TL/adet'])) * 100
+      : null,
+    grams: numberValue(row.Gram),
     trayCount: numberValue(row['Tabla adet']), trayHours: numberValue(row['Tabla süre (sa)']),
     image: String(row['Görsel URL']).trim(), source: row.Kaynak || '', like: row.Beğeni || '', status: row.Durum || '',
   };
@@ -317,7 +321,7 @@ if (isBrowser) {
         <div class="model-info">
           <div class="model-kicker"><span>${String(row.index + 1).padStart(3, '0')} · görselli sıra</span><span>${row.Ölçek ? `ölçek ${escapeHtml(row.Ölçek)}` : 'ölçek —'}</span></div>
           <div class="model-heading"><h2>${escapeHtml(row.Model)}</h2>${hasUsableImageUrl(row.source) ? `<a class="model-source" href="${escapeHtml(row.source)}" target="_blank" rel="noreferrer">${escapeHtml(hostOf(row.source))} ↗</a>` : '<span class="model-source">kaynak belirtilmemiş</span>'}</div>
-          <div class="economics"><div class="economic"><small>maliyet</small><strong>${formatMoney(row.cost)}</strong></div><div class="economic"><small>satış</small><strong>${formatMoney(row.sale)}</strong></div><div class="economic profit"><small>net kâr</small><strong>${formatMoney(row.profit)}</strong></div><div class="economic profit"><small>marj</small><strong>${formatPercent(row.margin)}</strong></div></div>
+          <div class="economics"><div class="economic"><small>maliyet</small><strong>${formatMoney(row.cost)}</strong></div><div class="economic"><small>satış</small><strong>${formatMoney(row.sale)}</strong></div><div class="economic profit"><small>net kâr</small><strong>${formatMoney(row.profit)}</strong></div><div class="economic profit" title="Net kâr / satış fiyatı"><small>marj · satış</small><strong>${formatPercent(row.margin)}</strong></div><div class="economic markup" title="Net kâr / maliyet"><small>markup · maliyet</small><strong>${formatPercent(row.markup)}</strong></div></div>
           <div class="model-detail-row"><div class="meta-list"><div><small>gram</small><strong>${row.grams == null ? '—' : `${row.grams.toLocaleString('tr-TR')} g`}</strong></div><div><small>tabla</small><strong>${row.trayCount == null ? '—' : `${row.trayCount} adet`}</strong></div><div><small>süre</small><strong>${row.trayHours == null ? '—' : `${row.trayHours.toLocaleString('tr-TR')} sa`}</strong></div></div>
           <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? `${currentVote === 'like' ? 'BEĞENDİM' : 'GEÇ · beğenmedim'} · kişisel kararın` : '← GEÇ / beğenmedim · BEĞENDİM / sağa →'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div></div>
         </div>
