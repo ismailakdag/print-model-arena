@@ -4,6 +4,8 @@ const API_URL = '/api/rate';
 const QUEUE_STORAGE_KEY = 'print-lab-write-queue-v2';
 const THEME_STORAGE_KEY = 'print-lab-theme';
 
+export const VOTE_BY_DIRECTION = Object.freeze({ left: 'dislike', right: 'like' });
+
 export function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -163,14 +165,14 @@ if (isBrowser) {
   const state = {
     rows: [], sourceCount: 0, excludedCount: 0, loading: true,
     mode: 'personal',
-    participant: storage.getItem('print-lab-participant') || '', myVotes: {}, filter: 'pending', search: '', sort: 'queue', currentId: null,
+    participant: (storage.getItem('print-lab-participant') || '').trim(), myVotes: {}, filter: 'pending', search: '', sort: 'queue', currentId: null,
     recent: [], history: [], transitioning: false, sheetLive: false, loadError: null, queue: null,
     queueStatus: { total: 0, pending: 0, failed: 0, online: navigator.onLine },
   };
   const $ = (selector) => document.querySelector(selector);
   const money = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 });
-  const voteStorageKey = () => `print-lab-votes-v2:${state.participant.trim().toLocaleLowerCase('tr-TR')}`;
-  const saveVotes = () => storage.setItem(voteStorageKey(), JSON.stringify(state.myVotes));
+  const voteStorageKey = (participant = state.participant) => `print-lab-votes-v2:${participant.trim().toLocaleLowerCase('tr-TR')}`;
+  const saveVotes = (participant = state.participant, votes = state.myVotes) => storage.setItem(voteStorageKey(participant), JSON.stringify(votes));
   const isLiked = (value) => String(value).toLocaleLowerCase('tr-TR').includes('beğendim');
   const isDisliked = (value) => String(value).toLocaleLowerCase('tr-TR').includes('beğenmedim');
   const isVoted = (row) => Boolean(state.myVotes[row.id]);
@@ -180,6 +182,8 @@ if (isBrowser) {
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'kaynak'; } };
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const writeTarget = (participant = state.participant) => `Ana Sheet → Oy · ${participant || 'katılımcı bekleniyor'}`;
+  let modalReturnFocus = null;
 
   function setTheme(theme, persist = false) {
     const nextTheme = theme === 'dark' ? 'dark' : 'light';
@@ -200,6 +204,37 @@ if (isBrowser) {
   function toast(message) {
     const element = $('#toast'); element.textContent = message; element.classList.add('show');
     clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.remove('show'), 3600);
+  }
+
+  function openParticipantModal() {
+    const modal = $('#participantModal');
+    modalReturnFocus = document.activeElement;
+    $('#participant').value = state.participant;
+    $('#modalWriteTarget').textContent = `Ana Sheet → Oy · ${state.participant || 'adın'}`;
+    $('#participantError').textContent = '';
+    $('#participantModalClose').classList.toggle('hidden', !state.participant);
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    $('.app-shell').inert = true;
+    requestAnimationFrame(() => $('#participant').focus());
+  }
+
+  function closeParticipantModal() {
+    if (!state.participant) return;
+    $('#participantModal').classList.add('hidden');
+    document.body.classList.remove('modal-open');
+    $('.app-shell').inert = false;
+    modalReturnFocus?.focus?.();
+  }
+
+  function saveParticipantFromModal() {
+    const input = $('#participant'); const value = input.value.trim();
+    if (!value) { $('#participantError').textContent = 'Devam etmek için bir ad veya rumuz yaz.'; input.focus(); return; }
+    const changed = value !== state.participant;
+    state.participant = value; storage.setItem('print-lab-participant', value); state.currentId = null;
+    if (changed) { state.history = []; state.recent = []; }
+    closeParticipantModal(); void loadParticipantVotes(); render();
+    toast(`${writeTarget()} hazır.`);
   }
 
   function visibleRows() {
@@ -260,8 +295,8 @@ if (isBrowser) {
     const currentVote = state.myVotes[row.id] || '';
     card.innerHTML = `
       <div class="swipe-wash dislike" aria-hidden="true"></div><div class="swipe-wash like" aria-hidden="true"></div>
-      <div class="swipe-stamp dislike" aria-hidden="true"><span class="stamp-icon">✕</span><span>GEÇ</span></div>
-      <div class="swipe-stamp like" aria-hidden="true"><span class="stamp-icon">♥</span><span>BEĞEN</span></div>
+      <div class="swipe-stamp dislike" aria-hidden="true"><span class="stamp-icon">✕</span><span>GEÇ</span><small>beğenmedim</small></div>
+      <div class="swipe-stamp like" aria-hidden="true"><span class="stamp-icon">♥</span><span>BEĞENDİM</span></div>
       <div class="model-visual">${imageMarkup(row, row.Model)}
         <div class="visual-shade" aria-hidden="true"></div>
         <div class="visual-overlay"><span class="badge">${escapeHtml(row.Sınıf || '—')} sınıfı</span>${row.status ? `<span class="badge olive">${escapeHtml(row.status)}</span>` : ''}</div>
@@ -270,7 +305,7 @@ if (isBrowser) {
           <div class="model-heading"><h2>${escapeHtml(row.Model)}</h2>${hasUsableImageUrl(row.source) ? `<a class="model-source" href="${escapeHtml(row.source)}" target="_blank" rel="noreferrer">${escapeHtml(hostOf(row.source))} ↗</a>` : '<span class="model-source">kaynak belirtilmemiş</span>'}</div>
           <div class="economics"><div class="economic"><small>maliyet</small><strong>${formatMoney(row.cost)}</strong></div><div class="economic"><small>satış</small><strong>${formatMoney(row.sale)}</strong></div><div class="economic profit"><small>net kâr</small><strong>${formatMoney(row.profit)}</strong></div><div class="economic profit"><small>marj</small><strong>${formatPercent(row.margin)}</strong></div></div>
           <div class="model-detail-row"><div class="meta-list"><div><small>gram</small><strong>${row.grams == null ? '—' : `${row.grams.toLocaleString('tr-TR')} g`}</strong></div><div><small>tabla</small><strong>${row.trayCount == null ? '—' : `${row.trayCount} adet`}</strong></div><div><small>süre</small><strong>${row.trayHours == null ? '—' : `${row.trayHours.toLocaleString('tr-TR')} sa`}</strong></div></div>
-          <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? `${currentVote === 'like' ? 'Beğenildi' : 'Geçildi'} · kişisel kararın` : 'sola geç · sağa beğen'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div></div>
+          <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? `${currentVote === 'like' ? 'BEĞENDİM' : 'GEÇ · beğenmedim'} · kişisel kararın` : '← GEÇ / beğenmedim · BEĞENDİM / sağa →'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div></div>
         </div>
       </div>`;
     card.tabIndex = 0; card.querySelector('img').addEventListener('error', () => removeBrokenImage(row.id), { once: true });
@@ -300,18 +335,21 @@ if (isBrowser) {
 
   function renderQueue() {
     const status = state.queueStatus; const element = $('#queueStatus'); const retry = $('#retryQueue');
+    const queuedParticipants = [...new Set((status.items || []).map((item) => item.payload?.participant).filter(Boolean))];
+    const target = escapeHtml((queuedParticipants.length ? queuedParticipants.map((participant) => writeTarget(participant)) : [writeTarget()]).join(' · '));
     retry.classList.toggle('hidden', !status.failed);
-    if (!status.online) { element.className = 'queue-status offline'; element.innerHTML = `<strong>Çevrimdışı</strong><span>${status.total} karar cihazda güvende; bağlantı gelince gönderilecek.</span>`; return; }
-    if (status.failed) { element.className = 'queue-status failed'; element.innerHTML = `<strong>${status.failed} kayıt bekliyor</strong><span>Otomatik denemeler tamamlanamadı. Kararlar cihazda tutuluyor.</span>`; return; }
-    if (status.pending) { element.className = 'queue-status syncing'; element.innerHTML = `<strong>${status.pending} karar eşitleniyor</strong><span>Oylamaya devam edebilirsin.</span>`; return; }
-    element.className = 'queue-status synced'; element.innerHTML = '<strong>Tüm kararlar eşitlendi</strong><span>Bekleyen Sheet kaydı yok.</span>';
+    if (!status.online) { element.className = 'queue-status offline'; element.innerHTML = `<strong>BEKLİYOR · çevrimdışı</strong><span>${status.total} karar cihazda güvende.<br>${target}</span>`; return; }
+    if (status.failed) { element.className = 'queue-status failed'; element.innerHTML = `<strong>BAŞARISIZ · ${status.failed} kayıt</strong><span>Kararlar cihazda tutuluyor; yeniden deneyebilirsin.<br>${target}</span>`; return; }
+    if (status.pending) { element.className = 'queue-status syncing'; element.innerHTML = `<strong>BEKLİYOR · ${status.pending} kayıt</strong><span>Arka planda eşitleniyor; oylamaya devam edebilirsin.<br>${target}</span>`; return; }
+    element.className = 'queue-status synced'; element.innerHTML = `<strong>EŞİTLENDİ</strong><span>Bekleyen Sheet kaydı yok.<br>${target}</span>`;
   }
 
   function renderChrome() {
     document.querySelectorAll('[data-mode]').forEach((button) => { const active = button.dataset.mode === state.mode; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); });
     document.querySelectorAll('[data-filter]').forEach((button) => button.classList.toggle('active', button.dataset.filter === state.filter));
-    $('#participantWrap').classList.toggle('hidden', state.mode !== 'personal'); $('#sharedNote').classList.toggle('hidden', state.mode !== 'shared'); $('#participant').value = state.participant;
-    const row = currentRow(); const locked = row && isVoted(row); const disabled = !row || locked || state.transitioning;
+    $('#participantWrap').classList.toggle('hidden', state.mode !== 'personal'); $('#sharedNote').classList.toggle('hidden', state.mode !== 'shared');
+    $('#controlWriteTarget').textContent = writeTarget(); $('#arenaWriteTarget').textContent = writeTarget();
+    const row = currentRow(); const locked = row && isVoted(row); const disabled = !state.participant || !row || locked || state.transitioning;
     $('#dislikeButton').disabled = disabled; $('#likeButton').disabled = disabled; $('#undoVote').disabled = state.mode !== 'personal' || !state.history.length || state.transitioning;
     $('#undoVote').classList.toggle('hidden', state.mode !== 'personal');
   }
@@ -353,12 +391,14 @@ if (isBrowser) {
 
   async function loadParticipantVotes() {
     if (state.mode !== 'personal' || !state.participant) return;
-    state.myVotes = safeJson(voteStorageKey(), {}); applyQueuedVotes(); render();
+    const participant = state.participant;
+    state.myVotes = safeJson(voteStorageKey(participant), {}); applyQueuedVotes(); render();
     try {
-      const response = await fetch(`${API_URL}?participant=${encodeURIComponent(state.participant)}`, { cache: 'no-store' }); const data = await response.json();
+      const response = await fetch(`${API_URL}?participant=${encodeURIComponent(participant)}`, { cache: 'no-store' }); const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.message || data.error);
-      state.myVotes = { ...(data.votes || {}) }; applyQueuedVotes(); saveVotes(); setConnection('live', 'Sheet canlı');
-    } catch { setConnection(state.queueStatus.total ? 'warning' : 'error', state.queueStatus.total ? 'eşitleme bekliyor' : 'oylar okunamadı'); }
+      if (state.participant !== participant) return;
+      state.myVotes = { ...(data.votes || {}) }; applyQueuedVotes(); saveVotes(participant); setConnection('live', 'Sheet canlı');
+    } catch { if (state.participant === participant) setConnection(state.queueStatus.total ? 'warning' : 'error', state.queueStatus.total ? 'eşitleme bekliyor' : 'oylar okunamadı'); }
     render();
   }
 
@@ -368,6 +408,7 @@ if (isBrowser) {
     if (state.mode === 'personal') state.history = [{ id: row.id, name: row.Model, vote, previous }, ...state.history.filter((item) => item.id !== row.id)].slice(0, 20);
     state.recent = [{ id: row.id, name: row.Model, vote }, ...state.recent.filter((item) => item.id !== row.id)].slice(0, 10);
     state.queue.enqueue({ action: 'vote', mode: state.mode, participant: state.participant, id: row.id, vote }); renderStats(); renderRecent(); renderQueue();
+    toast(`${row.Model} · ${vote === 'like' ? 'BEĞENDİM' : 'GEÇ / beğenmedim'} · ${writeTarget()} · bekliyor`);
   }
 
   function animateVote(vote) {
@@ -394,7 +435,7 @@ if (isBrowser) {
     if (last.previous) { state.myVotes[last.id] = last.previous; state.queue.enqueue({ action: 'vote', mode: 'personal', participant: state.participant, id: last.id, vote: last.previous }); }
     else { delete state.myVotes[last.id]; state.queue.enqueue({ action: 'undo', mode: 'personal', participant: state.participant, id: last.id }); }
     saveVotes(); state.recent = state.recent.filter((item) => item.id !== last.id); state.currentId = last.id; render();
-    $('#modelCard').focus({ preventScroll: true }); toast('Son karar geri alındı; Sheet kaydı arka planda güncelleniyor.');
+    $('#modelCard').focus({ preventScroll: true }); toast(`${last.name} · geri alındı · ${writeTarget()} · bekliyor`);
   }
 
   function bindCardGestures(card, locked) {
@@ -413,23 +454,36 @@ if (isBrowser) {
       if (!horizontal && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { reset(); return; }
       if (Math.abs(dx) > 7) horizontal = true; if (!horizontal) return; event.preventDefault();
       card.style.transform = `translate3d(${dx}px, ${Math.abs(dx) * -.025}px, 0) rotate(${Math.max(-12, Math.min(12, dx / 18))}deg)`;
-      const strength = Math.min(1, Math.max(0, (Math.abs(dx) - 8) / 110)); const vote = dx > 0 ? 'like' : 'dislike';
+      const strength = Math.min(1, Math.max(0, (Math.abs(dx) - 8) / 110)); const vote = dx > 0 ? VOTE_BY_DIRECTION.right : VOTE_BY_DIRECTION.left;
       card.dataset.swipeDirection = vote; card.style.setProperty('--swipe-strength', strength.toFixed(3)); card.style.setProperty('--stamp-scale', String(.68 + strength * .36));
     });
-    const release = (event) => { if (event.pointerId !== pointerId) return; const dx = event.clientX - startX; const threshold = Math.min(120, card.clientWidth * .22); if (horizontal && Math.abs(dx) >= threshold) { pointerId = null; card.classList.remove('dragging'); animateVote(dx > 0 ? 'like' : 'dislike'); } else reset(); };
+    const release = (event) => { if (event.pointerId !== pointerId) return; const dx = event.clientX - startX; const threshold = Math.min(120, card.clientWidth * .22); if (horizontal && Math.abs(dx) >= threshold) { pointerId = null; card.classList.remove('dragging'); animateVote(dx > 0 ? VOTE_BY_DIRECTION.right : VOTE_BY_DIRECTION.left); } else reset(); };
     card.addEventListener('pointerup', release); card.addEventListener('pointercancel', reset);
   }
 
   function bindEvents() {
     document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => { if (state.transitioning) return; state.mode = button.dataset.mode; state.filter = 'pending'; state.currentId = null; storage.setItem('print-lab-mode', state.mode); if (state.mode === 'personal') void loadParticipantVotes(); else { applyQueuedVotes(); render(); } }));
     document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => { state.filter = button.dataset.filter; state.currentId = null; render(); }));
-    $('#saveParticipant').addEventListener('click', () => { const value = $('#participant').value.trim(); if (!value) { toast('Bir ad veya rumuz yaz.'); return; } state.participant = value; storage.setItem('print-lab-participant', value); state.currentId = null; void loadParticipantVotes(); toast(`${value} için kişisel puanlama açıldı.`); });
-    $('#participant').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('#saveParticipant').click(); });
+    $('#changeParticipant').addEventListener('click', openParticipantModal);
+    $('#participantForm').addEventListener('submit', (event) => { event.preventDefault(); saveParticipantFromModal(); });
+    $('#participant').addEventListener('input', (event) => { $('#participantError').textContent = ''; $('#modalWriteTarget').textContent = `Ana Sheet → Oy · ${event.target.value.trim() || 'adın'}`; });
+    $('#participantModalClose').addEventListener('click', closeParticipantModal); $('#participantModalBackdrop').addEventListener('click', closeParticipantModal);
     $('#search').addEventListener('input', (event) => { state.search = event.target.value; state.currentId = null; render(); }); $('#sort').addEventListener('change', (event) => { state.sort = event.target.value; state.currentId = null; render(); });
-    $('#dislikeButton').addEventListener('click', (event) => tapVote('dislike', event.currentTarget)); $('#likeButton').addEventListener('click', (event) => tapVote('like', event.currentTarget)); $('#undoVote').addEventListener('click', undoLastVote); $('#retryQueue').addEventListener('click', () => state.queue.retryNow());
+    $('#dislikeButton').addEventListener('click', (event) => tapVote(VOTE_BY_DIRECTION.left, event.currentTarget)); $('#likeButton').addEventListener('click', (event) => tapVote(VOTE_BY_DIRECTION.right, event.currentTarget)); $('#undoVote').addEventListener('click', undoLastVote); $('#retryQueue').addEventListener('click', () => state.queue.retryNow());
     $('#themeToggle').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true));
     $('#resetSession').addEventListener('click', () => { state.recent = []; state.history = []; render(); toast('Oturum özeti temizlendi. Kaydedilmiş kararlar korunur.'); });
-    document.addEventListener('keydown', (event) => { if (event.target.matches('input, select, textarea')) return; if (event.key === 'ArrowLeft') { event.preventDefault(); animateVote('dislike'); } if (event.key === 'ArrowRight') { event.preventDefault(); animateVote('like'); } if (event.key.toLocaleLowerCase('tr-TR') === 'z') { event.preventDefault(); undoLastVote(); } });
+    document.addEventListener('keydown', (event) => {
+      const modalOpen = !$('#participantModal').classList.contains('hidden');
+      if (modalOpen) {
+        if (event.key === 'Escape' && state.participant) { event.preventDefault(); closeParticipantModal(); return; }
+        if (event.key === 'Tab') {
+          const focusable = [...$('#participantModal').querySelectorAll('button:not(.hidden), input')]; const first = focusable[0]; const last = focusable.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+      }
+      if (event.target.matches('input, select, textarea')) return; if (event.key === 'ArrowLeft') { event.preventDefault(); animateVote(VOTE_BY_DIRECTION.left); } if (event.key === 'ArrowRight') { event.preventDefault(); animateVote(VOTE_BY_DIRECTION.right); } if (event.key.toLocaleLowerCase('tr-TR') === 'z') { event.preventDefault(); undoLastVote(); }
+    });
     window.addEventListener('online', () => { state.queue.setOnline(true); setConnection('warning', 'eşitleniyor'); }); window.addEventListener('offline', () => { state.queue.setOnline(false); setConnection('offline', 'çevrimdışı'); });
     window.addEventListener('pagehide', () => state.queue.persist());
   }
@@ -439,5 +493,5 @@ if (isBrowser) {
   colorScheme.addEventListener?.('change', (event) => { if (!storage.getItem(THEME_STORAGE_KEY)) setTheme(event.matches ? 'dark' : 'light'); });
   state.queue = new PersistentVoteQueue({ storage, send: sendWrite, onChange: (status) => { state.queueStatus = status; if (document.readyState !== 'loading') renderQueue(); } });
   state.queue.online = navigator.onLine; state.queue.persist(); state.myVotes = state.participant ? safeJson(voteStorageKey(), safeJson('print-lab-votes', {})) : {};
-  bindEvents(); render(); void loadSheet(); if (state.mode === 'personal' && state.participant) void loadParticipantVotes();
+  bindEvents(); render(); void loadSheet(); if (state.mode === 'personal' && state.participant) void loadParticipantVotes(); else openParticipantModal();
 }

@@ -61,12 +61,12 @@
 
         </div>
         <div class="participant-wrap" id="participantWrap">
-          <label for="participant">adın / rumuzun</label>
-          <div class="participant-input-row">
-            <input id="participant" type="text" maxlength="40" placeholder="ör. ismail" autocomplete="nickname">
-            <button class="small-button" id="saveParticipant">başla</button>
+          <span class="participant-label">aktif yazma hedefi</span>
+          <div class="participant-summary">
+            <strong class="write-target" id="controlWriteTarget">Ana Sheet → Oy · katılımcı bekleniyor</strong>
+            <button class="text-button participant-edit" id="changeParticipant" type="button">adı değiştir</button>
           </div>
-          <span class="field-hint">Oyların ana Sheet’te adınla açılan kolonda tutulur; son kararını geri alabilirsin.</span>
+          <span class="field-hint">Her karar bu kişisel katılımcı kolonuna yazılır; son kararını geri alabilirsin.</span>
         </div>
         <div class="shared-note hidden" id="sharedNote">Ortak yazma şu an kapalı. Her katılımcının oyu kendi isim sütununa yazılır.</div>
       </section>
@@ -101,14 +101,15 @@
             <button class="undo-button" id="undoVote" type="button" disabled aria-label="Son kararı geri al">
               <span aria-hidden="true">↶</span><small>geri al</small>
             </button>
-            <button class="decision-button dislike" id="dislikeButton" type="button" aria-label="Beğenmedim, sola kaydır">
-              <span aria-hidden="true">✕</span><small>geç</small>
+            <button class="decision-button dislike" id="dislikeButton" data-direction="left" data-vote="dislike" type="button" aria-label="Sol: GEÇ, beğenmedim">
+              <span class="decision-icon" aria-hidden="true">✕</span><span class="decision-copy"><strong>GEÇ</strong><small>beğenmedim</small></span>
             </button>
-            <div class="swipe-instruction" aria-hidden="true"><span>←</span> kaydır <span>→</span></div>
-            <button class="decision-button like" id="likeButton" type="button" aria-label="Beğendim, sağa kaydır">
-              <span aria-hidden="true">♥</span><small>beğendim</small>
+            <div class="swipe-instruction" aria-hidden="true"><span>←</span> karar yönü <span>→</span></div>
+            <button class="decision-button like" id="likeButton" data-direction="right" data-vote="like" type="button" aria-label="Sağ: BEĞENDİM">
+              <span class="decision-icon" aria-hidden="true">♥</span><span class="decision-copy"><strong>BEĞENDİM</strong><small>sağa</small></span>
             </button>
           </div>
+          <div class="arena-write-target" id="arenaWriteTarget" aria-live="polite">Ana Sheet → Oy · katılımcı bekleniyor</div>
           <p class="keyboard-hint">Sürükle veya <kbd>←</kbd> geç · <kbd>→</kbd> beğen · <kbd>Z</kbd> geri al.</p>
         </div>
         <aside class="side-panel">
@@ -141,6 +142,23 @@
     </main>
 
     <footer class="footer"><span id="footerStatus">Sheet bağlantısı hazırlanıyor.</span><a href="https://docs.google.com/spreadsheets/d/1tJtASEdnz5HCUtkVqlTua-t2XoYGmHxL3FgJO7Y4UVI/edit" target="_blank" rel="noreferrer">kaynak Sheet ↗</a></footer>
+  </div>
+  <div class="participant-modal hidden" id="participantModal" role="dialog" aria-modal="true" aria-labelledby="participantModalTitle" aria-describedby="participantModalDescription">
+    <div class="modal-backdrop" id="participantModalBackdrop" aria-hidden="true"></div>
+    <div class="participant-dialog" role="document">
+      <button class="modal-close hidden" id="participantModalClose" type="button" aria-label="Katılımcı penceresini kapat">✕</button>
+      <p class="modal-eyebrow">kişisel oy alanın</p>
+      <h2 id="participantModalTitle">Arena’ya hangi adla katılıyorsun?</h2>
+      <p id="participantModalDescription">Adın veya rumuzun, oylarının yazılacağı kişisel Sheet kolonunu belirler.</p>
+      <form id="participantForm" novalidate>
+        <label for="participant">ad / rumuz</label>
+        <input id="participant" type="text" maxlength="40" placeholder="ör. ismail" autocomplete="nickname" required aria-describedby="participantHelp participantError">
+        <span class="participant-help" id="participantHelp">Yazma hedefin: <strong id="modalWriteTarget">Ana Sheet → Oy · adın</strong></span>
+        <span class="participant-error" id="participantError" aria-live="polite"></span>
+        <button class="modal-primary" id="saveParticipant" type="submit">Devam et</button>
+      </form>
+      <p class="modal-privacy">Kararların anında uygulanır ve bağlantıyı beklemeden güvenli kuyruğa alınır.</p>
+    </div>
   </div>
   <div class="toast" id="toast" role="status"></div>
   <script type="module" src="app.js"></script>
