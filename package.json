@@ -1,0 +1,8 @@
+{
+  "name": "print-model-arena",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  }
+}

@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/rate.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
