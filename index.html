@@ -1,9 +1,21 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f2eb">
+  <meta name="theme-color" content="#f3eee6">
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem('print-lab-theme');
+        const theme = saved === 'light' || saved === 'dark'
+          ? saved
+          : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#101210' : '#f3eee6';
+      } catch { /* keep the accessible light default */ }
+    })();
+  </script>
   <title>Print Model Arena</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +32,13 @@
           <small>model arena</small>
         </span>
       </a>
-      <div class="connection-state" id="connectionState"><span class="state-dot"></span><span>yükleniyor</span></div>
+      <div class="topbar-actions">
+        <div class="connection-state" id="connectionState"><span class="state-dot"></span><span>yükleniyor</span></div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Koyu temaya geç" aria-pressed="false">
+          <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+        </button>
+      </div>
     </header>
 
     <main>

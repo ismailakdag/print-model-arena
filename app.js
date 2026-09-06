@@ -2,6 +2,7 @@ const SHEET_ID = '1tJtASEdnz5HCUtkVqlTua-t2XoYGmHxL3FgJO7Y4UVI';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
 const API_URL = '/api/rate';
 const QUEUE_STORAGE_KEY = 'print-lab-write-queue-v2';
+const THEME_STORAGE_KEY = 'print-lab-theme';
 
 export function parseCsv(text) {
   const rows = [];
@@ -159,7 +160,6 @@ const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefine
 if (isBrowser) {
   const storage = window.localStorage;
   const safeJson = (key, fallback) => { try { return JSON.parse(storage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } };
-  const savedMode = storage.getItem('print-lab-mode');
   const state = {
     rows: [], sourceCount: 0, excludedCount: 0, loading: true,
     mode: 'personal',
@@ -179,6 +179,18 @@ if (isBrowser) {
   const formatPercent = (value) => value == null ? '—' : `${value.toFixed(1).replace('.', ',')}%`;
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'kaynak'; } };
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function setTheme(theme, persist = false) {
+    const nextTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    if (persist) storage.setItem(THEME_STORAGE_KEY, nextTheme);
+    const toggle = $('#themeToggle');
+    toggle.setAttribute('aria-pressed', String(nextTheme === 'dark'));
+    toggle.setAttribute('aria-label', nextTheme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç');
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = nextTheme === 'dark' ? '#101210' : '#f3eee6';
+  }
 
   function setConnection(mode, label) {
     $('.state-dot').className = `state-dot ${mode || ''}`;
@@ -229,7 +241,7 @@ if (isBrowser) {
 
   function previewMarkup(row) {
     if (!row) return '';
-    return `<div class="model-visual">${imageMarkup(row)}</div><div class="model-info"><small>sıradaki model</small><h3>${escapeHtml(row.Model)}</h3></div>`;
+    return `<div class="model-visual">${imageMarkup(row)}<div class="model-info"><small>sıradaki model</small><h3>${escapeHtml(row.Model)}</h3></div></div>`;
   }
 
   function emptyMarkup() {
@@ -248,14 +260,18 @@ if (isBrowser) {
     const currentVote = state.myVotes[row.id] || '';
     card.innerHTML = `
       <div class="swipe-wash dislike" aria-hidden="true"></div><div class="swipe-wash like" aria-hidden="true"></div>
-      <div class="swipe-stamp dislike" aria-hidden="true">GEÇ</div><div class="swipe-stamp like" aria-hidden="true">BEĞEN</div>
-      <div class="model-visual">${imageMarkup(row, row.Model)}<div class="visual-overlay"><span class="badge">${escapeHtml(row.Sınıf || '—')} sınıfı</span>${row.status ? `<span class="badge olive">${escapeHtml(row.status)}</span>` : ''}</div></div>
-      <div class="model-info"><div class="model-kicker"><span>${String(row.index + 1).padStart(3, '0')} · görselli sıra</span><span>${row.Ölçek ? `ölçek ${escapeHtml(row.Ölçek)}` : 'ölçek —'}</span></div>
-        <h2>${escapeHtml(row.Model)}</h2>
-        ${hasUsableImageUrl(row.source) ? `<a class="model-source" href="${escapeHtml(row.source)}" target="_blank" rel="noreferrer">${escapeHtml(hostOf(row.source))} ↗</a>` : '<span class="model-source">kaynak belirtilmemiş</span>'}
-        <div class="economics"><div class="economic"><small>maliyet / adet</small><strong>${formatMoney(row.cost)}</strong></div><div class="economic"><small>satış fiyatı</small><strong>${formatMoney(row.sale)}</strong></div><div class="economic profit"><small>net kâr</small><strong>${formatMoney(row.profit)}</strong></div><div class="economic profit"><small>marj</small><strong>${formatPercent(row.margin)}</strong></div></div>
-        <div class="meta-list"><div><small>gram</small><strong>${row.grams == null ? '—' : `${row.grams.toLocaleString('tr-TR')} g`}</strong></div><div><small>tabla</small><strong>${row.trayCount == null ? '—' : `${row.trayCount} adet`}</strong></div><div><small>süre</small><strong>${row.trayHours == null ? '—' : `${row.trayHours.toLocaleString('tr-TR')} sa`}</strong></div></div>
-        <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? `${currentVote === 'like' ? 'Beğenildi' : 'Geçildi'} · ${state.mode === 'shared' ? 'ortak karar kilitli' : 'kişisel kararın'}` : 'sola geç · sağa beğen'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div>
+      <div class="swipe-stamp dislike" aria-hidden="true"><span class="stamp-icon">✕</span><span>GEÇ</span></div>
+      <div class="swipe-stamp like" aria-hidden="true"><span class="stamp-icon">♥</span><span>BEĞEN</span></div>
+      <div class="model-visual">${imageMarkup(row, row.Model)}
+        <div class="visual-shade" aria-hidden="true"></div>
+        <div class="visual-overlay"><span class="badge">${escapeHtml(row.Sınıf || '—')} sınıfı</span>${row.status ? `<span class="badge olive">${escapeHtml(row.status)}</span>` : ''}</div>
+        <div class="model-info">
+          <div class="model-kicker"><span>${String(row.index + 1).padStart(3, '0')} · görselli sıra</span><span>${row.Ölçek ? `ölçek ${escapeHtml(row.Ölçek)}` : 'ölçek —'}</span></div>
+          <div class="model-heading"><h2>${escapeHtml(row.Model)}</h2>${hasUsableImageUrl(row.source) ? `<a class="model-source" href="${escapeHtml(row.source)}" target="_blank" rel="noreferrer">${escapeHtml(hostOf(row.source))} ↗</a>` : '<span class="model-source">kaynak belirtilmemiş</span>'}</div>
+          <div class="economics"><div class="economic"><small>maliyet</small><strong>${formatMoney(row.cost)}</strong></div><div class="economic"><small>satış</small><strong>${formatMoney(row.sale)}</strong></div><div class="economic profit"><small>net kâr</small><strong>${formatMoney(row.profit)}</strong></div><div class="economic profit"><small>marj</small><strong>${formatPercent(row.margin)}</strong></div></div>
+          <div class="model-detail-row"><div class="meta-list"><div><small>gram</small><strong>${row.grams == null ? '—' : `${row.grams.toLocaleString('tr-TR')} g`}</strong></div><div><small>tabla</small><strong>${row.trayCount == null ? '—' : `${row.trayCount} adet`}</strong></div><div><small>süre</small><strong>${row.trayHours == null ? '—' : `${row.trayHours.toLocaleString('tr-TR')} sa`}</strong></div></div>
+          <div class="card-footer"><span class="${locked ? 'lock-note' : ''}">${locked ? `${currentVote === 'like' ? 'Beğenildi' : 'Geçildi'} · kişisel kararın` : 'sola geç · sağa beğen'}</span>${row['Drive STL URL'] ? `<a href="${escapeHtml(row['Drive STL URL'])}" target="_blank" rel="noreferrer">STL ↗</a>` : ''}</div></div>
+        </div>
       </div>`;
     card.tabIndex = 0; card.querySelector('img').addEventListener('error', () => removeBrokenImage(row.id), { once: true });
     $('#nextCard').innerHTML = previewMarkup(nextRow(row)); bindCardGestures(card, locked);
@@ -359,9 +375,17 @@ if (isBrowser) {
     if (state.mode === 'personal' && !state.participant) { $('#participant').focus(); toast('Önce adını veya rumuzunu yaz.'); return; }
     state.transitioning = true; optimisticVote(row, vote);
     const card = $('#modelCard'); const direction = vote === 'like' ? 1 : -1;
-    card.querySelector(`.swipe-stamp.${vote}`).style.opacity = '1'; card.querySelector(`.swipe-wash.${vote}`).style.opacity = '1';
-    card.classList.add('swipe-out', vote); card.style.transform = `translate3d(${direction * Math.max(innerWidth, 760)}px, -18px, 0) rotate(${direction * 16}deg)`; card.style.opacity = '0';
-    setTimeout(() => { state.transitioning = false; state.currentId = null; render(); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220);
+    card.dataset.swipeDirection = vote; card.style.setProperty('--swipe-strength', '1'); card.style.setProperty('--stamp-scale', '1.04');
+    card.classList.add('swipe-out', 'releasing', vote); card.style.transform = `translate3d(${direction * Math.max(innerWidth, 760)}px, -22px, 0) rotate(${direction * 17}deg)`; card.style.opacity = '0';
+    setTimeout(() => { state.transitioning = false; state.currentId = null; render(); }, reducedMotion() ? 0 : 280);
+  }
+
+  function tapVote(vote, button) {
+    button.classList.remove('tap-feedback');
+    void button.offsetWidth;
+    button.classList.add('tap-feedback');
+    setTimeout(() => button.classList.remove('tap-feedback'), reducedMotion() ? 0 : 300);
+    animateVote(vote);
   }
 
   function undoLastVote() {
@@ -376,17 +400,23 @@ if (isBrowser) {
   function bindCardGestures(card, locked) {
     if (locked) return;
     let pointerId = null; let startX = 0; let startY = 0; let horizontal = false;
-    const reset = () => { pointerId = null; horizontal = false; card.classList.remove('dragging'); card.style.transform = ''; card.querySelectorAll('.swipe-stamp, .swipe-wash').forEach((element) => { element.style.opacity = ''; }); };
-    card.addEventListener('pointerdown', (event) => { if (state.transitioning || event.button !== 0 || event.target.closest('a, button, input, select')) return; pointerId = event.pointerId; startX = event.clientX; startY = event.clientY; card.setPointerCapture(pointerId); card.classList.add('dragging'); });
+    const reset = () => {
+      const activePointer = pointerId;
+      pointerId = null; horizontal = false; card.classList.remove('dragging'); card.classList.add('settling'); card.style.transform = '';
+      if (activePointer != null && card.hasPointerCapture(activePointer)) card.releasePointerCapture(activePointer);
+      card.style.removeProperty('--swipe-strength'); card.style.removeProperty('--stamp-scale'); delete card.dataset.swipeDirection;
+      setTimeout(() => card.classList.remove('settling'), reducedMotion() ? 0 : 300);
+    };
+    card.addEventListener('pointerdown', (event) => { if (state.transitioning || event.button !== 0 || event.target.closest('a, button, input, select')) return; pointerId = event.pointerId; startX = event.clientX; startY = event.clientY; card.setPointerCapture(pointerId); card.classList.remove('settling'); card.classList.add('dragging'); });
     card.addEventListener('pointermove', (event) => {
       if (event.pointerId !== pointerId) return; const dx = event.clientX - startX; const dy = event.clientY - startY;
       if (!horizontal && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { reset(); return; }
       if (Math.abs(dx) > 7) horizontal = true; if (!horizontal) return; event.preventDefault();
       card.style.transform = `translate3d(${dx}px, ${Math.abs(dx) * -.025}px, 0) rotate(${Math.max(-12, Math.min(12, dx / 18))}deg)`;
-      const strength = Math.min(1, Math.max(0, (Math.abs(dx) - 20) / 90)); const vote = dx > 0 ? 'like' : 'dislike';
-      card.querySelectorAll('.swipe-stamp, .swipe-wash').forEach((element) => { element.style.opacity = element.classList.contains(vote) ? String(strength) : '0'; });
+      const strength = Math.min(1, Math.max(0, (Math.abs(dx) - 8) / 110)); const vote = dx > 0 ? 'like' : 'dislike';
+      card.dataset.swipeDirection = vote; card.style.setProperty('--swipe-strength', strength.toFixed(3)); card.style.setProperty('--stamp-scale', String(.68 + strength * .36));
     });
-    const release = (event) => { if (event.pointerId !== pointerId) return; const dx = event.clientX - startX; const threshold = Math.min(120, card.clientWidth * .22); if (horizontal && Math.abs(dx) >= threshold) { pointerId = null; animateVote(dx > 0 ? 'like' : 'dislike'); } else reset(); };
+    const release = (event) => { if (event.pointerId !== pointerId) return; const dx = event.clientX - startX; const threshold = Math.min(120, card.clientWidth * .22); if (horizontal && Math.abs(dx) >= threshold) { pointerId = null; card.classList.remove('dragging'); animateVote(dx > 0 ? 'like' : 'dislike'); } else reset(); };
     card.addEventListener('pointerup', release); card.addEventListener('pointercancel', reset);
   }
 
@@ -396,13 +426,17 @@ if (isBrowser) {
     $('#saveParticipant').addEventListener('click', () => { const value = $('#participant').value.trim(); if (!value) { toast('Bir ad veya rumuz yaz.'); return; } state.participant = value; storage.setItem('print-lab-participant', value); state.currentId = null; void loadParticipantVotes(); toast(`${value} için kişisel puanlama açıldı.`); });
     $('#participant').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('#saveParticipant').click(); });
     $('#search').addEventListener('input', (event) => { state.search = event.target.value; state.currentId = null; render(); }); $('#sort').addEventListener('change', (event) => { state.sort = event.target.value; state.currentId = null; render(); });
-    $('#dislikeButton').addEventListener('click', () => animateVote('dislike')); $('#likeButton').addEventListener('click', () => animateVote('like')); $('#undoVote').addEventListener('click', undoLastVote); $('#retryQueue').addEventListener('click', () => state.queue.retryNow());
+    $('#dislikeButton').addEventListener('click', (event) => tapVote('dislike', event.currentTarget)); $('#likeButton').addEventListener('click', (event) => tapVote('like', event.currentTarget)); $('#undoVote').addEventListener('click', undoLastVote); $('#retryQueue').addEventListener('click', () => state.queue.retryNow());
+    $('#themeToggle').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true));
     $('#resetSession').addEventListener('click', () => { state.recent = []; state.history = []; render(); toast('Oturum özeti temizlendi. Kaydedilmiş kararlar korunur.'); });
     document.addEventListener('keydown', (event) => { if (event.target.matches('input, select, textarea')) return; if (event.key === 'ArrowLeft') { event.preventDefault(); animateVote('dislike'); } if (event.key === 'ArrowRight') { event.preventDefault(); animateVote('like'); } if (event.key.toLocaleLowerCase('tr-TR') === 'z') { event.preventDefault(); undoLastVote(); } });
     window.addEventListener('online', () => { state.queue.setOnline(true); setConnection('warning', 'eşitleniyor'); }); window.addEventListener('offline', () => { state.queue.setOnline(false); setConnection('offline', 'çevrimdışı'); });
     window.addEventListener('pagehide', () => state.queue.persist());
   }
 
+  setTheme(document.documentElement.dataset.theme);
+  const colorScheme = matchMedia('(prefers-color-scheme: dark)');
+  colorScheme.addEventListener?.('change', (event) => { if (!storage.getItem(THEME_STORAGE_KEY)) setTheme(event.matches ? 'dark' : 'light'); });
   state.queue = new PersistentVoteQueue({ storage, send: sendWrite, onChange: (status) => { state.queueStatus = status; if (document.readyState !== 'loading') renderQueue(); } });
   state.queue.online = navigator.onLine; state.queue.persist(); state.myVotes = state.participant ? safeJson(voteStorageKey(), safeJson('print-lab-votes', {})) : {};
   bindEvents(); render(); void loadSheet(); if (state.mode === 'personal' && state.participant) void loadParticipantVotes();

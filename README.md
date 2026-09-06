@@ -5,8 +5,10 @@
 ## Akış
 
 - Kartı mobilde sağa sürüklemek **beğendim**, sola sürüklemek **beğenmedim** demektir.
+- Sürükleme mesafesi kalp/X damgasını, renk yıkamasını ve kart açısını canlı olarak güçlendirir; eşik altındaki hareket yumuşakça yerine döner. Buton oylarında aynı kararın kısa dokunma geri bildirimi gösterilir.
 - Desktop’ta mouse drag, büyük butonlar ve `ArrowLeft` / `ArrowRight` aynı oyu verir.
 - Oy görsel olarak anında uygulanır ve kart ağ isteğini beklemeden sıradaki modele geçer.
+- Açık/koyu tema seçimi cihazda saklanır; ilk seçim yoksa sistem tercihi izlenir. Hareketler `prefers-reduced-motion` altında kısaltılır.
 - **Geri al** (`↶ geri al` veya `Z`) yalnızca kişisel moddaki bu oturumun son kararında çalışır. Önceki oy yerelde anında geri gelir; gerekli update/undo işlemi kuyruğa alınır.
 - Kişisel oy, ana veri sekmesinde `Oy · <katılımcı>` adlı kolona modelin sabit satırında yazılır. `Oylamalar` sekmesi eski istemciler ve raporlar için eşzamanlı mirror olarak korunur.
 - Ortak mod canonical `Beğeni` hücresini yalnızca boşsa yazar ve dolu satırı kilitli tutar. Aynı oyla gelen ağ retry’ı idempotent başarı sayılır.
